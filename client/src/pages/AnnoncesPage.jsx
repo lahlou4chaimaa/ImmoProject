@@ -524,6 +524,7 @@ export default function AnnoncesPage() {
                                     type="number"
                                     value={floor}
                                     onChange={e => setFloor(e.target.value)}
+
                                     placeholder="Ex: 2"
                                     min="0"
                                     className="w-full px-3 py-2.5 bg-surface-container border border-outline-variant/20 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40"
