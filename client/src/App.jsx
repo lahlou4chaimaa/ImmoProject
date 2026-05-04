@@ -1,13 +1,31 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
+import { useState, useEffect } from 'react'
 import { AuthProvider, useAuth } from './hooks/useAuth'
+
 import AuthPage from './pages/AuthPage'
 import DashboardPage from './pages/DashboardPage'
 import AnnoncesPage from './pages/AnnoncesPage'
+import Tutorial from './components/Tutorial'
 
-// Composant de protection de route
+
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
+  const [showTutorial, setShowTutorial] = useState(false)
+
+  useEffect(() => {
+    if (user) {
+      const seen = localStorage.getItem("seenTutorial")
+      if (!seen) {
+        setShowTutorial(true)
+      }
+    }
+  }, [user])
+
+  const handleFinish = () => {
+    localStorage.setItem("seenTutorial", "true")
+    setShowTutorial(false)
+  }
 
   if (loading) {
     return (
@@ -17,7 +35,16 @@ function ProtectedRoute({ children }) {
     )
   }
 
-  return user ? children : <Navigate to="/auth" replace />
+  if (!user) {
+    return <Navigate to="/auth" replace />
+  }
+
+  return (
+    <>
+      {showTutorial && <Tutorial onFinish={handleFinish} />}
+      {children}
+    </>
+  )
 }
 
 function App() {
@@ -25,11 +52,12 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <Toaster position="top-right" />
+
         <Routes>
-          {/* Route publique */}
+          {/* Public */}
           <Route path="/auth" element={<AuthPage />} />
 
-          {/* Routes protégées */}
+          {/* Protected */}
           <Route
             path="/dashboard"
             element={
@@ -48,7 +76,7 @@ function App() {
             }
           />
 
-          {/* Redirection par défaut (si l'utilisateur est connecté, tu pourrais rediriger vers /dashboard) */}
+          
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/auth" replace />} />
         </Routes>
