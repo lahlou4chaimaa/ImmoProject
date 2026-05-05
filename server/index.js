@@ -20,6 +20,7 @@ app.use('/api/auth', rateLimit({
 }))
 
 app.use('/api/auth', require('./routes/auth'))
+app.use('/api/admin', require('./routes/admin'))
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }))
 

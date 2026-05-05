@@ -14,18 +14,20 @@ function Icon({ name, filled = false, className = '' }) {
     )
 }
 
-function Sidebar({ displayName, initial, avatarUrl, unread, onSignOut }) {
+// ← isAdmin ajouté dans les props
+function Sidebar({ displayName, initial, avatarUrl, unread, onSignOut, isAdmin }) {
     const links = [
         { icon: 'dashboard', label: 'Dashboard', to: '/dashboard', active: true },
         { icon: 'domain', label: 'Annonces', to: '/annonces' },
         { icon: 'chat_bubble', label: 'Messages', to: '/messages', badge: unread },
         { icon: 'auto_fix_high', label: 'Studio IA', to: '/studio' },
+        // ← Visible uniquement pour les admins
+        ...(isAdmin ? [{ icon: 'shield_person', label: 'Administration', to: '/admin' }] : []),
         { icon: 'settings', label: 'Paramètres', to: '/parametres' },
     ]
     return (
         <aside className="h-screen w-64 fixed left-0 top-0 bg-surface flex flex-col p-6 z-50 border-r border-outline-variant/20">
             <div className="mb-8">
-
                 <p className="text-[10px] text-outline uppercase tracking-widest mt-1">Espace Personnel</p>
             </div>
             <nav className="flex flex-col gap-1">
@@ -63,7 +65,8 @@ function Sidebar({ displayName, initial, avatarUrl, unread, onSignOut }) {
 }
 
 export default function DashboardPage() {
-    const { user, signOut } = useAuth()
+    // ← profile ajouté ici
+    const { user, profile, signOut } = useAuth()
     const navigate = useNavigate()
     const [supabaseData, setSupabaseData] = useState({ views: 0, unread: 0, favorites: [] })
     const [dbReady, setDbReady] = useState(false)
@@ -72,7 +75,6 @@ export default function DashboardPage() {
     const avatarUrl = user?.user_metadata?.avatar_url
     const initial = displayName[0]?.toUpperCase()
 
-    // Tentative de chargement Supabase — ne crash pas si tables absentes
     useEffect(() => {
         if (!user) return
         async function tryLoad() {
@@ -117,6 +119,7 @@ export default function DashboardPage() {
                 avatarUrl={avatarUrl}
                 unread={supabaseData.unread}
                 onSignOut={handleSignOut}
+                isAdmin={profile?.role === 'admin'}  // ← profile est maintenant défini
             />
 
             <main className="flex-1 ml-64 p-10">
@@ -156,8 +159,6 @@ export default function DashboardPage() {
 
                 {/* Bento Stats */}
                 <section className="grid grid-cols-12 gap-5 mb-14">
-
-                    {/* Card principale */}
                     <div className="col-span-12 md:col-span-8 bg-surface-container-lowest p-8 rounded-xl flex flex-col justify-between min-h-[200px]">
                         <div className="flex justify-between items-start">
                             <div>
@@ -174,7 +175,6 @@ export default function DashboardPage() {
                         </Link>
                     </div>
 
-                    {/* Biens consultés */}
                     <div className="col-span-12 md:col-span-4 p-8 rounded-xl flex flex-col justify-between min-h-[200px] bg-primary text-white">
                         <div className="flex justify-between items-start">
                             <Icon name="visibility" className="text-white/80 text-[24px]" />
@@ -186,7 +186,6 @@ export default function DashboardPage() {
                         </div>
                     </div>
 
-                    {/* Messages */}
                     <div className="col-span-12 md:col-span-4 p-8 rounded-xl flex flex-col justify-between min-h-[160px] bg-secondary-container">
                         <div className="flex justify-between items-start">
                             <Icon name="mail" className="text-[24px] text-on-surface" />
@@ -200,7 +199,6 @@ export default function DashboardPage() {
                         </div>
                     </div>
 
-                    {/* Favoris résumé */}
                     <div className="col-span-12 md:col-span-8 bg-surface-container-low p-8 rounded-xl flex items-center justify-between">
                         <div className="flex items-center gap-5">
                             <div className="p-4 bg-surface-container-lowest rounded-full">
@@ -281,7 +279,9 @@ export default function DashboardPage() {
                         <div className="flex-1 text-center md:text-left">
                             <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-3">
                                 <h5 className="text-2xl font-headline font-bold">{displayName}</h5>
-                                <span className="text-xs px-4 py-1.5 border border-primary text-primary rounded-full font-bold mt-2 md:mt-0">Acheteur</span>
+                                <span className="text-xs px-4 py-1.5 border border-primary text-primary rounded-full font-bold mt-2 md:mt-0">
+                                    {profile?.role === 'admin' ? 'Administrateur' : 'Acheteur'}
+                                </span>
                             </div>
                             <p className="text-on-surface-variant text-sm">{user?.email}</p>
                             <div className="mt-5 flex flex-wrap gap-3 justify-center md:justify-start">
@@ -296,7 +296,6 @@ export default function DashboardPage() {
 
                 {/* Footer */}
                 <footer className="py-10 flex justify-between items-center border-t border-outline-variant/15 mt-16 text-sm">
-
                     <span className="text-outline">© 2025 DarNa — Plateforme Immobilière Marocaine</span>
                     <div className="flex gap-5">
                         <a href="#" className="text-outline hover:text-on-surface">Confidentialité</a>
