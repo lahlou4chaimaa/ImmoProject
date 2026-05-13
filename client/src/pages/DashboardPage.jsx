@@ -1,19 +1,19 @@
-// Version debug — à remplacer dès que les tables Supabase sont créées
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 
-function Icon({ name, filled = false, className = '' }) {
+function Icon({ name, className = '' }) {
     return (
         <span
             className={`material-symbols-outlined select-none ${className}`}
-            style={{ fontVariationSettings: `'FILL' ${filled ? 1 : 0}, 'wght' 400, 'GRAD' 0, 'opsz' 24` }}
+            style={{ fontVariationSettings: `'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24` }}
         >
             {name}
         </span>
     )
 }
 
+// Sidebar 100% user — aucun lien admin, aucune condition isAdmin
 function Sidebar({ displayName, initial, avatarUrl, unread, onSignOut }) {
     const links = [
         { icon: 'dashboard', label: 'Dashboard', to: '/dashboard', active: true },
@@ -25,14 +25,14 @@ function Sidebar({ displayName, initial, avatarUrl, unread, onSignOut }) {
     return (
         <aside className="h-screen w-64 fixed left-0 top-0 bg-surface flex flex-col p-6 z-50 border-r border-outline-variant/20">
             <div className="mb-8">
-
+                <p className="text-base font-headline font-extrabold text-primary">DarNa</p>
                 <p className="text-[10px] text-outline uppercase tracking-widest mt-1">Espace Personnel</p>
             </div>
             <nav className="flex flex-col gap-1">
                 {links.map(l => (
                     <Link key={l.to} to={l.to}
                         className={`flex items-center gap-3 px-4 py-3 rounded-full text-sm font-medium transition-all
-              ${l.active ? 'bg-secondary-container text-primary' : 'text-outline hover:text-on-surface hover:translate-x-1'}`}>
+                            ${l.active ? 'bg-secondary-container text-primary' : 'text-outline hover:text-on-surface hover:translate-x-1'}`}>
                         <Icon name={l.icon} className="text-[20px]" />
                         <span>{l.label}</span>
                         {l.badge > 0 && (
@@ -72,7 +72,6 @@ export default function DashboardPage() {
     const avatarUrl = user?.user_metadata?.avatar_url
     const initial = displayName[0]?.toUpperCase()
 
-    // Tentative de chargement Supabase — ne crash pas si tables absentes
     useEffect(() => {
         if (!user) return
         async function tryLoad() {
@@ -92,19 +91,14 @@ export default function DashboardPage() {
                     favorites: (favs.data || []).map(f => f.properties).filter(Boolean),
                 })
                 setDbReady(true)
-            } catch (e) {
-                console.warn('Tables Supabase non encore créées:', e.message)
+            } catch {
                 setDbReady(false)
             }
         }
         tryLoad()
     }, [user])
 
-    async function handleSignOut() {
-        await signOut()
-        navigate('/auth')
-    }
-
+    const handleSignOut = async () => { await signOut(); navigate('/auth') }
     const fmt = (n) => new Intl.NumberFormat('fr-MA', { style: 'currency', currency: 'MAD', maximumFractionDigits: 0 }).format(n)
 
     return (
@@ -121,7 +115,6 @@ export default function DashboardPage() {
 
             <main className="flex-1 ml-64 p-10">
 
-                {/* Header */}
                 <header className="mb-12 flex justify-between items-end">
                     <div>
                         <h2 className="text-4xl font-headline font-extrabold tracking-tight text-primary mb-3 leading-tight">
@@ -141,23 +134,18 @@ export default function DashboardPage() {
                     </div>
                 </header>
 
-                {/* Alerte si DB pas prête */}
                 {!dbReady && (
                     <div className="mb-8 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-3">
                         <Icon name="info" className="text-amber-600 text-[22px]" />
                         <div>
                             <p className="text-sm font-medium text-amber-800">Tables Supabase non détectées</p>
-                            <p className="text-xs text-amber-700 mt-0.5">
-                                Lance le script SQL dans Supabase pour activer les données réelles. Le dashboard fonctionne en mode démo pour l'instant.
-                            </p>
+                            <p className="text-xs text-amber-700 mt-0.5">Lance le script SQL dans Supabase pour activer les données réelles.</p>
                         </div>
                     </div>
                 )}
 
                 {/* Bento Stats */}
                 <section className="grid grid-cols-12 gap-5 mb-14">
-
-                    {/* Card principale */}
                     <div className="col-span-12 md:col-span-8 bg-surface-container-lowest p-8 rounded-xl flex flex-col justify-between min-h-[200px]">
                         <div className="flex justify-between items-start">
                             <div>
@@ -167,14 +155,12 @@ export default function DashboardPage() {
                             <Icon name="search" className="text-primary text-[28px]" />
                         </div>
                         <p className="text-on-surface-variant text-sm mt-4 mb-5">Explorez les annonces immobilières au Maroc — vente, location, terrains.</p>
-                        <Link to="/annonces"
-                            className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-full text-sm font-medium hover:opacity-90 w-fit">
+                        <Link to="/annonces" className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-full text-sm font-medium hover:opacity-90 w-fit">
                             <Icon name="search" className="text-[16px]" />
                             Explorer les annonces
                         </Link>
                     </div>
 
-                    {/* Biens consultés */}
                     <div className="col-span-12 md:col-span-4 p-8 rounded-xl flex flex-col justify-between min-h-[200px] bg-primary text-white">
                         <div className="flex justify-between items-start">
                             <Icon name="visibility" className="text-white/80 text-[24px]" />
@@ -186,21 +172,17 @@ export default function DashboardPage() {
                         </div>
                     </div>
 
-                    {/* Messages */}
                     <div className="col-span-12 md:col-span-4 p-8 rounded-xl flex flex-col justify-between min-h-[160px] bg-secondary-container">
                         <div className="flex justify-between items-start">
                             <Icon name="mail" className="text-[24px] text-on-surface" />
                             <span className="text-[10px] uppercase tracking-widest text-on-surface-variant">Messages non lus</span>
                         </div>
                         <div>
-                            <p className="text-5xl font-headline font-extrabold text-on-surface">
-                                {String(supabaseData.unread).padStart(2, '0')}
-                            </p>
+                            <p className="text-5xl font-headline font-extrabold text-on-surface">{String(supabaseData.unread).padStart(2, '0')}</p>
                             <p className="text-sm text-on-surface-variant mt-2">Aucun message en attente</p>
                         </div>
                     </div>
 
-                    {/* Favoris résumé */}
                     <div className="col-span-12 md:col-span-8 bg-surface-container-low p-8 rounded-xl flex items-center justify-between">
                         <div className="flex items-center gap-5">
                             <div className="p-4 bg-surface-container-lowest rounded-full">
@@ -219,13 +201,12 @@ export default function DashboardPage() {
                     </div>
                 </section>
 
-                {/* Section Favoris */}
+                {/* Favoris */}
                 <section className="mb-14">
                     <div className="flex justify-between items-baseline mb-8">
                         <h3 className="text-3xl font-headline font-bold tracking-tight">Mes Favoris</h3>
                         <Link to="/favoris" className="text-primary font-bold text-sm hover:underline">Voir tout</Link>
                     </div>
-
                     {supabaseData.favorites.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
                             {supabaseData.favorites.map((p, i) => (
@@ -281,11 +262,15 @@ export default function DashboardPage() {
                         <div className="flex-1 text-center md:text-left">
                             <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-3">
                                 <h5 className="text-2xl font-headline font-bold">{displayName}</h5>
-                                <span className="text-xs px-4 py-1.5 border border-primary text-primary rounded-full font-bold mt-2 md:mt-0">Acheteur</span>
+                                <span className="text-xs px-4 py-1.5 border border-primary text-primary rounded-full font-bold mt-2 md:mt-0">
+                                    Acheteur
+                                </span>
                             </div>
                             <p className="text-on-surface-variant text-sm">{user?.email}</p>
                             <div className="mt-5 flex flex-wrap gap-3 justify-center md:justify-start">
-                                <Link to="/parametres" className="px-5 py-2.5 bg-primary text-white rounded-full text-sm font-medium hover:opacity-90">Éditer le profil</Link>
+                                <Link to="/parametres" className="px-5 py-2.5 bg-primary text-white rounded-full text-sm font-medium hover:opacity-90">
+                                    Éditer le profil
+                                </Link>
                                 <button onClick={handleSignOut} className="px-5 py-2.5 border border-outline-variant/30 text-on-surface rounded-full text-sm font-medium hover:bg-surface-container-low transition-colors">
                                     Se déconnecter
                                 </button>
@@ -294,9 +279,7 @@ export default function DashboardPage() {
                     </div>
                 </section>
 
-                {/* Footer */}
                 <footer className="py-10 flex justify-between items-center border-t border-outline-variant/15 mt-16 text-sm">
-
                     <span className="text-outline">© 2025 DarNa — Plateforme Immobilière Marocaine</span>
                     <div className="flex gap-5">
                         <a href="#" className="text-outline hover:text-on-surface">Confidentialité</a>
@@ -304,7 +287,6 @@ export default function DashboardPage() {
                         <a href="#" className="text-outline hover:text-on-surface">Contact</a>
                     </div>
                 </footer>
-
             </main>
         </div>
     )

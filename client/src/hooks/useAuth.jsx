@@ -1,30 +1,51 @@
 import { useState, useEffect, createContext, useContext } from 'react'
 import { supabase } from '../lib/supabase'
+import axios from 'axios'
 
 const AuthContext = createContext(null)
+
+const ADMIN_EMAIL = 'chayoumlala@proton.me'
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null)
     const [loading, setLoading] = useState(true)
 
+    const isAdmin = user?.email === ADMIN_EMAIL
+
+    // ─── Intercepteur axios : attache automatiquement le token à CHAQUE requête ─
     useEffect(() => {
-        // Récupérer la session active au démarrage
+        const interceptor = axios.interceptors.request.use(async (config) => {
+            const { data: { session } } = await supabase.auth.getSession()
+            if (session?.access_token) {
+                config.headers.Authorization = `Bearer ${session.access_token}`
+            }
+            return config
+        })
+        // Nettoyage à la destruction du provider
+        return () => axios.interceptors.request.eject(interceptor)
+    }, [])
+
+    useEffect(() => {
+        let mounted = true
+
         supabase.auth.getSession().then(({ data: { session } }) => {
+            if (!mounted) return
             setUser(session?.user ?? null)
             setLoading(false)
         })
 
-        // Écouter les changements d'état auth (login/logout)
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(
-            (_event, session) => setUser(session?.user ?? null)
-        )
-        return () => subscription.unsubscribe()
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            if (!mounted) return
+            setUser(session?.user ?? null)
+            setLoading(false)
+        })
+
+        return () => { mounted = false; subscription.unsubscribe() }
     }, [])
 
     const signUp = async (email, password, fullName) => {
         const { data, error } = await supabase.auth.signUp({
-            email,
-            password,
+            email, password,
             options: { data: { full_name: fullName } }
         })
         if (error) throw error
@@ -40,17 +61,32 @@ export function AuthProvider({ children }) {
     const signInWithGoogle = async () => {
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
-            options: { redirectTo: `${window.location.origin}/dashboard` }
+            options: { redirectTo: `${window.location.origin}/auth` }
         })
         if (error) throw error
     }
 
     const signOut = async () => {
         await supabase.auth.signOut()
+        setUser(null)
+        setLoading(false)
     }
 
+    // ─── Appels admin — le token est injecté automatiquement par l'intercepteur ─
+    const getAllUsers = async () => (await axios.get('/admin/users')).data
+    const suspendUser = async (id) => (await axios.patch(`/admin/users/${id}/status`, { status: 'suspended' })).data
+    const activateUser = async (id) => (await axios.patch(`/admin/users/${id}/status`, { status: 'active' })).data
+    const banUser = async (id) => (await axios.patch(`/admin/users/${id}/status`, { status: 'banned' })).data
+    const updateUserRole = async (id, role) => (await axios.patch(`/admin/users/${id}/role`, { role })).data
+    const deleteUser = async (id) => (await axios.delete(`/admin/users/${id}`)).data
+
     return (
-        <AuthContext.Provider value={{ user, loading, signUp, signIn, signInWithGoogle, signOut }}>
+        <AuthContext.Provider value={{
+            user, loading, isAdmin,
+            signUp, signIn, signInWithGoogle, signOut,
+            getAllUsers, suspendUser, activateUser,
+            banUser, updateUserRole, deleteUser,
+        }}>
             {children}
         </AuthContext.Provider>
     )
