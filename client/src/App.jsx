@@ -4,10 +4,11 @@ import AuthPage from './pages/AuthPage'
 import DashboardPage from './pages/DashboardPage'
 import AnnoncesPage from './pages/AnnoncesPage'
 import AdminPage from './pages/AdminPage'
+import MapPage from './pages/MapPage'
 import axios from 'axios'
 import './App.css'
+import AnnonceDetailPage from './pages/AnnonceDetailPage'
 
-// BaseURL définie UNE seule fois ici, avant tout
 axios.defaults.baseURL = 'http://localhost:3001/api'
 
 function Loader() {
@@ -34,6 +35,14 @@ function AdminRoute({ children }) {
     return children
 }
 
+// Route accessible par tous les utilisateurs connectés (user ET admin)
+function ProtectedRoute({ children }) {
+    const { user, loading } = useAuth()
+    if (loading) return <Loader />
+    if (!user) return <Navigate to="/auth" replace />
+    return children
+}
+
 function AuthGuard() {
     const { user, isAdmin, loading } = useAuth()
     if (loading) return <Loader />
@@ -50,6 +59,11 @@ function App() {
                     <Route path="/dashboard" element={<UserRoute><DashboardPage /></UserRoute>} />
                     <Route path="/annonces" element={<UserRoute><AnnoncesPage /></UserRoute>} />
                     <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
+
+                    {/* Carte accessible par tous les utilisateurs connectés */}
+                    <Route path="/carte" element={<ProtectedRoute><MapPage /></ProtectedRoute>} />
+                    <Route path="/annonce/:id" element={<ProtectedRoute><AnnonceDetailPage /></ProtectedRoute>} />
+
                     <Route path="/" element={<Navigate to="/auth" replace />} />
                     <Route path="*" element={<Navigate to="/auth" replace />} />
                 </Routes>
