@@ -1,13 +1,17 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { Toaster } from 'react-hot-toast'
+import { useState, useEffect } from 'react'
 import { AuthProvider, useAuth } from './hooks/useAuth'
+import axios from 'axios'
+
 import AuthPage from './pages/AuthPage'
 import DashboardPage from './pages/DashboardPage'
 import AnnoncesPage from './pages/AnnoncesPage'
 import AdminPage from './pages/AdminPage'
 import MapPage from './pages/MapPage'
-import axios from 'axios'
-import './App.css'
 import AnnonceDetailPage from './pages/AnnonceDetailPage'
+import Tutorial from './components/Tutorial'
+import './App.css'
 
 axios.defaults.baseURL = 'http://localhost:3001/api'
 
@@ -21,10 +25,30 @@ function Loader() {
 
 function UserRoute({ children }) {
     const { user, isAdmin, loading } = useAuth()
+    const [showTutorial, setShowTutorial] = useState(false)
+
+    useEffect(() => {
+        if (user && !isAdmin) {
+            const seen = localStorage.getItem("seenTutorial")
+            if (!seen) setShowTutorial(true)
+        }
+    }, [user, isAdmin])
+
+    const handleFinish = () => {
+        localStorage.setItem("seenTutorial", "true")
+        setShowTutorial(false)
+    }
+
     if (loading) return <Loader />
     if (!user) return <Navigate to="/auth" replace />
     if (isAdmin) return <Navigate to="/admin" replace />
-    return children
+
+    return (
+        <>
+            {showTutorial && <Tutorial onFinish={handleFinish} />}
+            {children}
+        </>
+    )
 }
 
 function AdminRoute({ children }) {
@@ -35,7 +59,6 @@ function AdminRoute({ children }) {
     return children
 }
 
-// Route accessible par tous les utilisateurs connectés (user ET admin)
 function ProtectedRoute({ children }) {
     const { user, loading } = useAuth()
     if (loading) return <Loader />
@@ -54,13 +77,18 @@ function App() {
     return (
         <BrowserRouter>
             <AuthProvider>
+                <Toaster position="top-right" />
                 <Routes>
                     <Route path="/auth" element={<AuthGuard />} />
+
+                    {/* Routes Utilisateurs */}
                     <Route path="/dashboard" element={<UserRoute><DashboardPage /></UserRoute>} />
                     <Route path="/annonces" element={<UserRoute><AnnoncesPage /></UserRoute>} />
+
+                    {/* Route Admin */}
                     <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
 
-                    {/* Carte accessible par tous les utilisateurs connectés */}
+                    {/* Routes accessibles par tous les utilisateurs connectés */}
                     <Route path="/carte" element={<ProtectedRoute><MapPage /></ProtectedRoute>} />
                     <Route path="/annonce/:id" element={<ProtectedRoute><AnnonceDetailPage /></ProtectedRoute>} />
 
