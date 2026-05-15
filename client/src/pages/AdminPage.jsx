@@ -248,6 +248,7 @@ export default function AdminPage() {
                                             >
                                                 <option value="user">Utilisateur</option>
                                                 <option value="admin">Admin</option>
+
                                             </select>
                                         </td>
 

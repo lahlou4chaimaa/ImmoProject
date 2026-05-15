@@ -11,8 +11,10 @@ export function AuthProvider({ children }) {
     const [loading, setLoading] = useState(true)
 
     const isAdmin = user?.email === ADMIN_EMAIL
+    const isSeller = !isAdmin && user?.user_metadata?.role === 'vendeur'
+    const isBuyer = !isAdmin && !isSeller
 
-    // ─── Intercepteur axios : attache automatiquement le token à CHAQUE requête ─
+    // ─── Intercepteur axios : attache automatiquement le token ───────────────
     useEffect(() => {
         const interceptor = axios.interceptors.request.use(async (config) => {
             const { data: { session } } = await supabase.auth.getSession()
@@ -21,7 +23,6 @@ export function AuthProvider({ children }) {
             }
             return config
         })
-        // Nettoyage à la destruction du provider
         return () => axios.interceptors.request.eject(interceptor)
     }, [])
 
@@ -43,10 +44,17 @@ export function AuthProvider({ children }) {
         return () => { mounted = false; subscription.unsubscribe() }
     }, [])
 
-    const signUp = async (email, password, fullName) => {
+    // ─── signUp accepte maintenant un rôle ──────────────────────────────────
+    const signUp = async (email, password, fullName, role = 'acheteur') => {
         const { data, error } = await supabase.auth.signUp({
-            email, password,
-            options: { data: { full_name: fullName } }
+            email,
+            password,
+            options: {
+                data: {
+                    full_name: fullName,
+                    role: role, // 'acheteur' ou 'vendeur'
+                }
+            }
         })
         if (error) throw error
         return data
@@ -72,17 +80,18 @@ export function AuthProvider({ children }) {
         setLoading(false)
     }
 
-    // ─── Appels admin — le token est injecté automatiquement par l'intercepteur ─
-    const getAllUsers = async () => (await axios.get('/admin/users')).data
-    const suspendUser = async (id) => (await axios.patch(`/admin/users/${id}/status`, { status: 'suspended' })).data
-    const activateUser = async (id) => (await axios.patch(`/admin/users/${id}/status`, { status: 'active' })).data
-    const banUser = async (id) => (await axios.patch(`/admin/users/${id}/status`, { status: 'banned' })).data
-    const updateUserRole = async (id, role) => (await axios.patch(`/admin/users/${id}/role`, { role })).data
-    const deleteUser = async (id) => (await axios.delete(`/admin/users/${id}`)).data
+    // ─── Appels admin ────────────────────────────────────────────────────────
+    const getAllUsers = async () => (await axios.get('/api/admin/users')).data
+    const suspendUser = async (id) => (await axios.patch(`/api/admin/users/${id}/status`, { status: 'suspended' })).data
+    const activateUser = async (id) => (await axios.patch(`/api/admin/users/${id}/status`, { status: 'active' })).data
+    const banUser = async (id) => (await axios.patch(`/api/admin/users/${id}/status`, { status: 'banned' })).data
+    const updateUserRole = async (id, role) => (await axios.patch(`/api/admin/users/${id}/role`, { role })).data
+    const deleteUser = async (id) => (await axios.delete(`/api/admin/users/${id}`)).data
 
     return (
         <AuthContext.Provider value={{
-            user, loading, isAdmin,
+            user, loading,
+            isAdmin, isSeller, isBuyer,
             signUp, signIn, signInWithGoogle, signOut,
             getAllUsers, suspendUser, activateUser,
             banUser, updateUserRole, deleteUser,
