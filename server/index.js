@@ -38,6 +38,10 @@ app.use('/api/auth', authLimiter, require('./routes/auth'))
 // Routes d'administration
 app.use('/api/admin', require('./routes/admin'))
 
+
+const studioRouter = require('./routes/studio')
+app.use('/api/studio', studioRouter)
+
 // Route de santé pour tester si le serveur répond
 app.get('/api/health', (req, res) => res.json({
     status: 'ok',

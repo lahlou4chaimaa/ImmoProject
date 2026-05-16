@@ -232,7 +232,7 @@ export default function MapPage() {
                                             <p style={{ color: '#2d8653', fontWeight: 'bold', fontSize: '14px' }}>
                                                 {fmt(p.price)}
                                             </p>
-                                            {p.rooms && (
+                                            {p.rooms  && (
                                                 <p style={{ fontSize: '12px', color: '#666' }}>
                                                     🛏 {p.rooms} ch. · {p.surface} m²
                                                 </p>

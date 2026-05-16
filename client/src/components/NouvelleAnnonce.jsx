@@ -201,6 +201,15 @@ function Step3({ data, set }) {
             { value: "a_renover", label: "À rénover" },
           ]} />
         </div>
+        <div style={{ paddingRight: 8 }}>
+          <Select label="Style de design 🎨" value={data.designStyle || ""} onChange={v => set("designStyle", v)} options={[
+            { value: "", label: "Aucun style spécifique" },
+            { value: "moderne", label: "Moderne & Épuré" },
+            { value: "marocain", label: "Marocain Authentique" },
+            { value: "minimaliste", label: "Minimaliste Zen" },
+            { value: "scandinave", label: "Scandinave & Cosy" },
+          ]} />
+        </div>
       </div>
 
       {/* Équipements */}

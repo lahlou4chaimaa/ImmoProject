@@ -13,6 +13,7 @@ import AnnonceDetailPage from './pages/AnnonceDetailPage'
 import SellerPage from './pages/SellerPage'
 import Tutorial from './components/Tutorial'
 import './App.css'
+import StudioPage from './pages/StudioPage'
 
 axios.defaults.baseURL = 'http://localhost:3001'
 
@@ -114,6 +115,7 @@ function App() {
                     {/* Commun (tous connectés) */}
                     <Route path="/carte" element={<ProtectedRoute><MapPage /></ProtectedRoute>} />
                     <Route path="/annonce/:id" element={<ProtectedRoute><AnnonceDetailPage /></ProtectedRoute>} />
+                    <Route path="/studio" element={<ProtectedRoute><StudioPage /></ProtectedRoute>} />
 
                     <Route path="/" element={<Navigate to="/auth" replace />} />
                     <Route path="*" element={<Navigate to="/auth" replace />} />
