@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { supabase } from '../lib/supabase'
 import NotificationsBell from '../components/NotificationsBell'
 
 function Icon({ name, className = '' }) {
@@ -14,10 +15,11 @@ function Icon({ name, className = '' }) {
     )
 }
 
-function Sidebar({ displayName, initial, avatarUrl, unread, onSignOut }) {
+function Sidebar({ displayName, initial, avatarUrl, unread, onSignOut, currentPath }) {
     const links = [
-        { icon: 'dashboard', label: 'Dashboard', to: '/dashboard', active: true },
+        { icon: 'dashboard', label: 'Dashboard', to: '/dashboard' },
         { icon: 'domain', label: 'Annonces', to: '/annonces' },
+        { icon: 'history', label: 'Récemment consultés', to: '/dashboard#recents' },
         { icon: 'chat_bubble', label: 'Messages', to: '/messages', badge: unread },
         { icon: 'auto_fix_high', label: 'Studio IA', to: '/studio' },
         { icon: 'settings', label: 'Paramètres', to: '/parametres' },
@@ -30,9 +32,21 @@ function Sidebar({ displayName, initial, avatarUrl, unread, onSignOut }) {
             </div>
             <nav className="flex flex-col gap-1">
                 {links.map(l => (
-                    <Link key={l.to} to={l.to}
+                    <Link
+                        key={l.to}
+                        to={l.to}
+                        onClick={l.to === '/dashboard#recents'
+                            ? (e) => {
+                                e.preventDefault()
+                                document.getElementById('recents')?.scrollIntoView({ behavior: 'smooth' })
+                            }
+                            : undefined
+                        }
                         className={`flex items-center gap-3 px-4 py-3 rounded-full text-sm font-medium transition-all
-                            ${l.active ? 'bg-secondary-container text-primary' : 'text-outline hover:text-on-surface hover:translate-x-1'}`}>
+                            ${l.to === '/dashboard' && currentPath === '/dashboard'
+                                ? 'bg-secondary-container text-primary'
+                                : 'text-outline hover:text-on-surface hover:translate-x-1'}`}
+                    >
                         <Icon name={l.icon} className="text-[20px]" />
                         <span>{l.label}</span>
                         {l.badge > 0 && (
@@ -66,6 +80,7 @@ export default function DashboardPage() {
     const { user, signOut } = useAuth()
     const navigate = useNavigate()
     const [supabaseData, setSupabaseData] = useState({ views: 0, unread: 0, favorites: [] })
+    const [recentlyViewed, setRecentlyViewed] = useState([])
     const [dbReady, setDbReady] = useState(false)
 
     const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Utilisateur'
@@ -76,22 +91,51 @@ export default function DashboardPage() {
         if (!user) return
         async function tryLoad() {
             try {
-                const { createClient } = await import('@supabase/supabase-js')
-                const sb = createClient(
-                    import.meta.env.VITE_SUPABASE_URL,
-                    import.meta.env.VITE_SUPABASE_ANON_KEY
-                )
-                const [views, favs] = await Promise.all([
-                    sb.from('property_views').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
-                    sb.from('favorites').select('property_id, properties(id,title,price,city,type,status,surface,rooms,images)').eq('user_id', user.id).limit(3),
-                ])
+                // Favoris
+                const { data: favsData } = await supabase
+                    .from('favorites')
+                    .select('property_id, properties(id,title,price,city,type,status,surface,rooms,images)')
+                    .eq('user_id', user.id)
+                    .limit(3)
+
+                // Vues total
+                const { count: viewsCount } = await supabase
+                    .from('property_views')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('user_id', user.id)
+
+                // Récemment consultés
+                const { data: recentData, error: recentError } = await supabase
+                    .from('property_views')
+                    .select('property_id, viewed_at, properties(id,title,price,city,type,surface,rooms,images)')
+                    .eq('user_id', user.id)
+                    .order('viewed_at', { ascending: false })
+                    .limit(20)
+
+                if (recentError) {
+                    console.error('Erreur recent:', recentError)
+                }
+
+                // Dédupliquer
+                const seen = new Set()
+                const uniqueRecent = (recentData || [])
+                    .filter(r => {
+                        if (!r.properties || seen.has(r.property_id)) return false
+                        seen.add(r.property_id)
+                        return true
+                    })
+                    .slice(0, 4)
+                    .map(r => ({ ...r.properties, viewed_at: r.viewed_at }))
+
+                setRecentlyViewed(uniqueRecent)
                 setSupabaseData({
-                    views: views.count || 0,
+                    views: viewsCount || 0,
                     unread: 0,
-                    favorites: (favs.data || []).map(f => f.properties).filter(Boolean),
+                    favorites: (favsData || []).map(f => f.properties).filter(Boolean),
                 })
                 setDbReady(true)
-            } catch {
+            } catch (err) {
+                console.error('Dashboard load error:', err)
                 setDbReady(false)
             }
         }
@@ -100,6 +144,8 @@ export default function DashboardPage() {
 
     const handleSignOut = async () => { await signOut(); navigate('/auth') }
     const fmt = (n) => new Intl.NumberFormat('fr-MA', { style: 'currency', currency: 'MAD', maximumFractionDigits: 0 }).format(n)
+    const typeLabel = { sale: 'Vente', rent: 'Location', land: 'Terrain' }
+    const typeColor = { sale: 'bg-blue-500', rent: 'bg-teal-500', land: 'bg-amber-500' }
 
     return (
         <div className="bg-background text-on-surface flex min-h-screen font-body">
@@ -111,6 +157,7 @@ export default function DashboardPage() {
                 avatarUrl={avatarUrl}
                 unread={supabaseData.unread}
                 onSignOut={handleSignOut}
+                currentPath="/dashboard"
             />
 
             <main className="flex-1 ml-64 p-10">
@@ -128,7 +175,6 @@ export default function DashboardPage() {
                         <Link to="/annonces" className="p-3 bg-surface-container-highest text-on-surface rounded-full hover:bg-surface-container-high transition-colors">
                             <Icon name="search" className="text-[22px]" />
                         </Link>
-                        {/* ✅ NotificationsBell remplace l'ancien bouton notifications */}
                         <NotificationsBell />
                     </div>
                 </header>
@@ -198,6 +244,67 @@ export default function DashboardPage() {
                             Voir les favoris
                         </Link>
                     </div>
+                </section>
+
+                {/* ✅ Biens récemment consultés */}
+                <section id="recents" className="mb-14">
+                    <div className="flex justify-between items-baseline mb-6">
+                        <h3 className="text-3xl font-headline font-bold tracking-tight">Récemment consultés</h3>
+                        <Link to="/annonces" className="text-primary font-bold text-sm hover:underline">
+                            Voir toutes les annonces
+                        </Link>
+                    </div>
+
+                    {recentlyViewed.length === 0 ? (
+                        <div className="text-center py-16 bg-surface-container-low rounded-2xl">
+                            <Icon name="history" className="text-[56px] text-outline-variant mb-3" />
+                            <p className="text-on-surface-variant font-medium mb-2">Aucun bien consulté récemment</p>
+                            <p className="text-xs text-outline mb-5">Explorez des annonces pour les retrouver ici.</p>
+                            <Link to="/annonces" className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-full text-sm font-medium hover:opacity-90">
+                                <Icon name="search" className="text-[16px]" />
+                                Explorer les annonces
+                            </Link>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                            {recentlyViewed.map(p => (
+                                <Link
+                                    key={p.id}
+                                    to={`/annonce/${p.id}`}
+                                    className="group bg-surface-container-lowest rounded-2xl overflow-hidden border border-outline-variant/10 hover:border-primary/20 hover:shadow-md transition-all"
+                                >
+                                    <div className="relative h-36 bg-surface-container overflow-hidden">
+                                        {p.images?.[0] ? (
+                                            <img src={p.images[0]} alt={p.title}
+                                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center">
+                                                <Icon name="home" className="text-[40px] text-outline-variant" />
+                                            </div>
+                                        )}
+                                        <span className={`absolute top-2 left-2 px-2 py-0.5 ${typeColor[p.type] || 'bg-primary'} text-white text-[9px] font-semibold rounded-full uppercase tracking-wider`}>
+                                            {typeLabel[p.type] || p.type}
+                                        </span>
+                                    </div>
+                                    <div className="p-3">
+                                        <p className="text-sm font-bold text-on-surface truncate mb-0.5">{p.title}</p>
+                                        <p className="text-xs text-on-surface-variant flex items-center gap-1 mb-2">
+                                            <Icon name="location_on" className="text-[12px] text-primary" />
+                                            {p.city}
+                                        </p>
+                                        <p className="text-sm font-extrabold text-primary">{fmt(p.price)}</p>
+                                        <p className="text-[10px] text-outline mt-1.5 flex items-center gap-1">
+                                            <Icon name="schedule" className="text-[11px]" />
+                                            {new Date(p.viewed_at).toLocaleDateString('fr-FR', {
+                                                day: '2-digit', month: 'short',
+                                                hour: '2-digit', minute: '2-digit'
+                                            })}
+                                        </p>
+                                    </div>
+                                </Link>
+                            ))}
+                        </div>
+                    )}
                 </section>
 
                 {/* Favoris */}

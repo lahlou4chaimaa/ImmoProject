@@ -15,11 +15,12 @@ function Icon({ name, filled = false, className = '' }) {
     )
 }
 
-function Sidebar({ displayName, initial, avatarUrl, activePage, onSignOut }) {
+function Sidebar({ displayName, initial, avatarUrl, activePage, onSignOut, unreadCount = 0 }) {
     const links = [
         { icon: 'dashboard', label: 'Tableau de bord', to: 'dashboard' },
         { icon: 'add_circle', label: 'Publier une annonce', to: 'new' },
         { icon: 'domain', label: 'Mes annonces', to: 'listings' },
+        { icon: 'chat_bubble', label: 'Messages reçus', to: 'messages', badge: unreadCount },
     ]
     return (
         <aside className="h-screen w-64 fixed left-0 top-0 bg-surface flex flex-col p-6 z-50 border-r border-outline-variant/20">
@@ -39,6 +40,11 @@ function Sidebar({ displayName, initial, avatarUrl, activePage, onSignOut }) {
                     >
                         <Icon name={l.icon} className="text-[20px]" />
                         <span>{l.label}</span>
+                        {l.badge > 0 && (
+                            <span className="ml-auto bg-primary text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full">
+                                {l.badge}
+                            </span>
+                        )}
                     </button>
                 ))}
             </nav>
@@ -440,12 +446,230 @@ function SellerDashboard({ user, onNavigate }) {
         </div>
     )
 }
+// ─── Messages reçus par le vendeur ──────────────────────────────────────────
+function SellerMessages({ user }) {
+    const [messages, setMessages] = useState([])
+    const [loading, setLoading] = useState(true)
+    const [selected, setSelected] = useState(null)
+    const [reply, setReply] = useState('')
+    const [sending, setSending] = useState(false)
 
+    const fmt = (d) => new Date(d).toLocaleDateString('fr-FR', {
+        day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    })
+
+    const load = async () => {
+        setLoading(true)
+        try {
+            const { data, error } = await supabase
+                .from('messages')
+                .select(`
+                    id, content, read, created_at, property_id,
+                    sender_id,
+                    properties(id, title, images)
+                `)
+                .eq('receiver_id', user.id)
+                .order('created_at', { ascending: false })
+            if (error) throw error
+            setMessages(data || [])
+        } catch (err) {
+            toast.error('Erreur chargement des messages')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    useEffect(() => { load() }, [user])
+
+    const handleOpen = async (msg) => {
+        setSelected(msg)
+        setReply('')
+        // Marquer comme lu
+        if (!msg.read) {
+            await supabase.from('messages').update({ read: true }).eq('id', msg.id)
+            setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, read: true } : m))
+        }
+    }
+
+    const handleReply = async () => {
+        if (!reply.trim()) return
+        setSending(true)
+        try {
+            const { error } = await supabase.from('messages').insert({
+                property_id: selected.property_id,
+                sender_id: user.id,
+                receiver_id: selected.sender_id,
+                content: reply.trim(),
+            })
+            if (error) throw error
+            toast.success('Réponse envoyée !')
+            setReply('')
+            setSelected(null)
+        } catch (err) {
+            toast.error(err.message || 'Erreur envoi')
+        } finally {
+            setSending(false)
+        }
+    }
+
+    const unreadCount = messages.filter(m => !m.read).length
+
+    if (loading) return (
+        <div className="flex items-center justify-center py-20">
+            <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+        </div>
+    )
+
+    return (
+        <div>
+            <header className="mb-8 flex items-center gap-4">
+                <div>
+                    <h3 className="text-2xl font-headline font-extrabold text-on-surface">Messages reçus</h3>
+                    <p className="text-sm text-on-surface-variant mt-1">
+                        {messages.length} message{messages.length !== 1 ? 's' : ''}
+                        {unreadCount > 0 && (
+                            <span className="ml-2 px-2 py-0.5 bg-primary text-white text-[10px] rounded-full font-semibold">
+                                {unreadCount} non lu{unreadCount > 1 ? 's' : ''}
+                            </span>
+                        )}
+                    </p>
+                </div>
+            </header>
+
+            {messages.length === 0 ? (
+                <div className="text-center py-24 bg-surface-container-low rounded-2xl">
+                    <Icon name="chat_bubble" className="text-[64px] text-outline-variant mb-3" />
+                    <p className="text-on-surface-variant font-medium">Aucun message reçu pour l'instant</p>
+                    <p className="text-xs text-outline mt-1">Les acheteurs intéressés vous contacteront ici.</p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-12 gap-6">
+
+                    {/* Liste messages */}
+                    <div className="col-span-12 lg:col-span-5 flex flex-col gap-2">
+                        {messages.map(msg => (
+                            <button
+                                key={msg.id}
+                                onClick={() => handleOpen(msg)}
+                                className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+                                    selected?.id === msg.id
+                                        ? 'border-primary bg-primary/5'
+                                        : 'border-transparent bg-surface-container-lowest hover:border-outline-variant/30'
+                                }`}
+                            >
+                                <div className="flex items-start gap-3">
+                                    {/* Avatar initiale */}
+                                    <div className="w-9 h-9 rounded-full bg-primary-container flex items-center justify-center text-primary text-sm font-bold flex-shrink-0">
+                                        A
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between mb-0.5">
+                                            <p className={`text-sm font-semibold truncate ${!msg.read ? 'text-on-surface' : 'text-on-surface-variant'}`}>
+                                                Acheteur intéressé
+                                            </p>
+                                            {!msg.read && (
+                                                <span className="w-2 h-2 bg-primary rounded-full flex-shrink-0 ml-2" />
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-on-surface-variant truncate mb-1">
+                                            📌 {msg.properties?.title || 'Annonce'}
+                                        </p>
+                                        <p className={`text-xs truncate ${!msg.read ? 'text-on-surface font-medium' : 'text-outline'}`}>
+                                            {msg.content}
+                                        </p>
+                                        <p className="text-[10px] text-outline mt-1.5">{fmt(msg.created_at)}</p>
+                                    </div>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Panneau détail + réponse */}
+                    <div className="col-span-12 lg:col-span-7">
+                        {selected ? (
+                            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/15 overflow-hidden">
+
+                                {/* Header */}
+                                <div className="p-5 border-b border-outline-variant/15 flex items-center gap-4">
+                                    {selected.properties?.images?.[0] ? (
+                                        <img src={selected.properties.images[0]} alt=""
+                                            className="w-14 h-14 rounded-xl object-cover flex-shrink-0" />
+                                    ) : (
+                                        <div className="w-14 h-14 rounded-xl bg-surface-container flex items-center justify-center flex-shrink-0">
+                                            <Icon name="home" className="text-outline-variant text-[24px]" />
+                                        </div>
+                                    )}
+                                    <div>
+                                        <p className="text-xs text-on-surface-variant mb-0.5">Annonce concernée</p>
+                                        <p className="font-bold text-on-surface text-sm">
+                                            {selected.properties?.title || 'Annonce'}
+                                        </p>
+                                        <p className="text-[10px] text-outline mt-0.5">
+                                            Reçu le {fmt(selected.created_at)}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Message */}
+                                <div className="p-5">
+                                    <div className="flex items-start gap-3 mb-6">
+                                        <div className="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-primary text-xs font-bold flex-shrink-0">
+                                            A
+                                        </div>
+                                        <div className="bg-surface-container px-4 py-3 rounded-2xl rounded-tl-none max-w-sm">
+                                            <p className="text-sm text-on-surface leading-relaxed">{selected.content}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Zone réponse */}
+                                    <div className="border-t border-outline-variant/15 pt-5">
+                                        <p className="text-xs font-medium text-on-surface-variant mb-3">Votre réponse :</p>
+                                        <textarea
+                                            value={reply}
+                                            onChange={e => setReply(e.target.value)}
+                                            placeholder="Écrivez votre réponse à l'acheteur..."
+                                            rows={3}
+                                            className="w-full px-4 py-3 bg-surface-container border border-outline-variant/20 rounded-xl text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all placeholder:text-outline/40 resize-none mb-3"
+                                        />
+                                        <div className="flex justify-between items-center">
+                                            <p className="text-[10px] text-on-surface-variant flex items-center gap-1">
+                                                <Icon name="lock" className="text-[12px]" />
+                                                La réponse sera envoyée de façon anonyme
+                                            </p>
+                                            <button
+                                                onClick={handleReply}
+                                                disabled={sending || !reply.trim()}
+                                                className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-xl text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-all"
+                                            >
+                                                {sending
+                                                    ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                    : <><Icon name="send" className="text-[16px]" />Répondre</>
+                                                }
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="h-full flex items-center justify-center py-20 bg-surface-container-low rounded-2xl">
+                                <div className="text-center">
+                                    <Icon name="chat_bubble_outline" className="text-[48px] text-outline-variant mb-3" />
+                                    <p className="text-sm text-on-surface-variant">Sélectionnez un message pour le lire</p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}
 // ─── Page principale vendeur ─────────────────────────────────────────────────
 export default function SellerPage() {
     const { user, signOut } = useAuth()
     const navigate = useNavigate()
     const [activePage, setActivePage] = useState('dashboard')
+    const [unreadCount, setUnreadCount] = useState(0)
 
     const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Vendeur'
     const avatarUrl = user?.user_metadata?.avatar_url
@@ -456,6 +680,16 @@ export default function SellerPage() {
         window.addEventListener('seller-nav', handler)
         return () => window.removeEventListener('seller-nav', handler)
     }, [])
+
+    useEffect(() => {
+        if (!user) return
+        supabase
+            .from('messages')
+            .select('id', { count: 'exact', head: true })
+            .eq('receiver_id', user.id)
+            .eq('read', false)
+            .then(({ count }) => setUnreadCount(count || 0))
+    }, [user, activePage])
 
     const handleSignOut = async () => { await signOut(); navigate('/auth') }
 
@@ -469,12 +703,14 @@ export default function SellerPage() {
                 avatarUrl={avatarUrl}
                 activePage={activePage}
                 onSignOut={handleSignOut}
+                unreadCount={unreadCount}
             />
 
             <main className="flex-1 ml-64 p-10">
                 {activePage === 'dashboard' && <SellerDashboard user={user} onNavigate={setActivePage} />}
                 {activePage === 'new' && <NewListingForm onSuccess={() => setActivePage('listings')} />}
                 {activePage === 'listings' && <MyListings user={user} />}
+                {activePage === 'messages' && <SellerMessages user={user} />}
             </main>
         </div>
     )
