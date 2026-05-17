@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import NotificationsBell from './NotificationsBell'
 
 function Icon({ name, className = '' }) {
     return (
@@ -25,6 +26,7 @@ export default function Sidebar({ activePage = '' }) {
         { icon: 'dashboard',     label: 'Dashboard',       to: '/dashboard' },
         { icon: 'domain',        label: 'Annonces',        to: '/annonces' },
         { icon: 'map',           label: 'Carte',           to: '/carte' },
+        { icon: 'favorite',      label: 'Favoris',         to: '/favoris' },
         { icon: 'chat_bubble',   label: 'Messages',        to: '/messages' },
         { icon: 'auto_fix_high', label: 'Studio IA',       to: '/studio' },
         ...(isAdmin ? [{ icon: 'shield_person', label: 'Administration', to: '/admin' }] : []),
@@ -38,12 +40,23 @@ export default function Sidebar({ activePage = '' }) {
 
     return (
         <aside className="h-screen w-64 fixed left-0 top-0 bg-surface flex flex-col p-6 z-50 border-r border-outline-variant/20">
-            <div className="mb-8">
-                <p className="text-[10px] text-outline uppercase tracking-widest mt-1">
-                    {isAdmin ? 'Espace Admin' : 'Espace Personnel'}
-                </p>
+
+            {/* ── Logo + cloche ── */}
+            <div className="mb-8 flex items-center justify-between">
+                <div>
+                    <h1 className="text-xl font-headline font-bold text-primary tracking-tighter">
+                        🏠 DarNa
+                    </h1>
+                    <p className="text-[10px] text-outline uppercase tracking-widest mt-1">
+                        {isAdmin ? 'Espace Admin' : 'Espace Personnel'}
+                    </p>
+                </div>
+
+                {/* 🔔 Cloche notifications */}
+                <NotificationsBell />
             </div>
 
+            {/* ── Navigation ── */}
             <nav className="flex flex-col gap-1">
                 {links.map(l => (
                     <Link key={l.to} to={l.to}
@@ -58,6 +71,7 @@ export default function Sidebar({ activePage = '' }) {
                 ))}
             </nav>
 
+            {/* ── Profil utilisateur ── */}
             <div className="mt-auto pt-6">
                 <div className="p-4 bg-surface-container-low rounded-xl flex items-center gap-3">
                     {avatarUrl

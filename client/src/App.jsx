@@ -11,6 +11,7 @@ import AdminPage from './pages/AdminPage'
 import MapPage from './pages/MapPage'
 import AnnonceDetailPage from './pages/AnnonceDetailPage'
 import SellerPage from './pages/SellerPage'
+import FavorisPage from './pages/FavorisPage'
 import Tutorial from './components/Tutorial'
 import './App.css'
 import StudioPage from './pages/StudioPage'
@@ -105,6 +106,7 @@ function App() {
                     {/* Acheteur */}
                     <Route path="/dashboard" element={<BuyerRoute><DashboardPage /></BuyerRoute>} />
                     <Route path="/annonces" element={<BuyerRoute><AnnoncesPage /></BuyerRoute>} />
+                    <Route path="/favoris" element={<BuyerRoute><FavorisPage /></BuyerRoute>} />
 
                     {/* Vendeur */}
                     <Route path="/seller" element={<SellerRoute><SellerPage /></SellerRoute>} />

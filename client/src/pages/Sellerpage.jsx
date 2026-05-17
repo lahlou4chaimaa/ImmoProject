@@ -63,7 +63,7 @@ function Sidebar({ displayName, initial, avatarUrl, activePage, onSignOut }) {
 
 // ─── Formulaire de publication ───────────────────────────────────────────────
 function NewListingForm({ onSuccess }) {
-    const { user } = useAuth() // ← lu directement depuis le contexte, pas via prop
+    const { user } = useAuth()
     const [loading, setLoading] = useState(false)
     const [imageUrls, setImageUrls] = useState([''])
     const [form, setForm] = useState({
@@ -103,7 +103,7 @@ function NewListingForm({ onSuccess }) {
                 lng: form.lng ? Number(form.lng) : null,
                 images: images.length > 0 ? images : null,
                 status: 'active',
-                user_id: user.id, // ← seul identifiant utilisé
+                user_id: user.id,
             })
             if (error) throw error
             toast.success('Annonce publiée avec succès !')
@@ -123,7 +123,6 @@ function NewListingForm({ onSuccess }) {
         <form onSubmit={handleSubmit} className="max-w-3xl">
             <h3 className="text-2xl font-headline font-extrabold text-on-surface mb-8">Publier une annonce</h3>
 
-            {/* Infos principales */}
             <div className="bg-surface-container-lowest rounded-2xl p-6 mb-5 border border-outline-variant/10">
                 <h4 className="text-sm font-bold text-on-surface mb-5 flex items-center gap-2">
                     <Icon name="info" className="text-primary text-[18px]" />
@@ -159,7 +158,6 @@ function NewListingForm({ onSuccess }) {
                 </div>
             </div>
 
-            {/* Caractéristiques */}
             <div className="bg-surface-container-lowest rounded-2xl p-6 mb-5 border border-outline-variant/10">
                 <h4 className="text-sm font-bold text-on-surface mb-5 flex items-center gap-2">
                     <Icon name="tune" className="text-primary text-[18px]" />
@@ -196,7 +194,6 @@ function NewListingForm({ onSuccess }) {
                 </div>
             </div>
 
-            {/* Localisation */}
             <div className="bg-surface-container-lowest rounded-2xl p-6 mb-5 border border-outline-variant/10">
                 <h4 className="text-sm font-bold text-on-surface mb-5 flex items-center gap-2">
                     <Icon name="location_on" className="text-primary text-[18px]" />
@@ -228,7 +225,6 @@ function NewListingForm({ onSuccess }) {
                 </div>
             </div>
 
-            {/* Photos */}
             <div className="bg-surface-container-lowest rounded-2xl p-6 mb-8 border border-outline-variant/10">
                 <h4 className="text-sm font-bold text-on-surface mb-5 flex items-center gap-2">
                     <Icon name="photo_library" className="text-primary text-[18px]" />
@@ -275,9 +271,18 @@ function NewListingForm({ onSuccess }) {
 function MyListings({ user }) {
     const [listings, setListings] = useState([])
     const [loading, setLoading] = useState(true)
+    const [statusMenu, setStatusMenu] = useState(null) // id de l'annonce dont le menu est ouvert
 
     const fmt = (n) => new Intl.NumberFormat('fr-MA', { style: 'currency', currency: 'MAD', maximumFractionDigits: 0 }).format(n)
     const typeLabel = { sale: 'Vente', rent: 'Location', land: 'Terrain' }
+
+    // Config des statuts
+    const statusConfig = {
+        active:  { label: 'Active',  bg: 'bg-green-100',  text: 'text-green-800',  icon: 'check_circle' },
+        sold:    { label: 'Vendu',   bg: 'bg-red-100',    text: 'text-red-800',    icon: 'sell' },
+        rented:  { label: 'Loué',    bg: 'bg-purple-100', text: 'text-purple-800', icon: 'key' },
+        inactive:{ label: 'Inactif', bg: 'bg-gray-100',   text: 'text-gray-600',   icon: 'pause_circle' },
+    }
 
     const load = async () => {
         setLoading(true)
@@ -285,7 +290,7 @@ function MyListings({ user }) {
             const { data, error } = await supabase
                 .from('properties')
                 .select('id, title, type, price, city, status, created_at, images, surface, rooms')
-                .eq('user_id', user.id) // ← user_id
+                .eq('user_id', user.id)
                 .order('created_at', { ascending: false })
             if (error) throw error
             setListings(data || [])
@@ -301,25 +306,27 @@ function MyListings({ user }) {
     const handleDelete = async (id) => {
         if (!window.confirm('Supprimer cette annonce ?')) return
         const { error } = await supabase.from('properties')
-            .delete()
-            .eq('id', id)
-            .eq('user_id', user.id)  // ← ajouter
+            .delete().eq('id', id).eq('user_id', user.id)
         if (error) return toast.error('Erreur suppression')
         toast.success('Annonce supprimée')
         load()
     }
 
-    const handleToggleStatus = async (id, currentStatus) => {
-        const newStatus = currentStatus === 'active' ? 'sold' : 'active'
+    const handleSetStatus = async (id, newStatus) => {
+        setStatusMenu(null)
         const { error } = await supabase.from('properties')
             .update({ status: newStatus })
             .eq('id', id)
             .eq('user_id', user.id)
-        if (error) {
-            console.error('Toggle error:', error)
-            return toast.error(error.message)
+        if (error) return toast.error(error.message)
+
+        const messages = {
+            active:  '✅ Annonce réactivée',
+            sold:    '🏷️ Bien marqué comme Vendu',
+            rented:  '🔑 Bien marqué comme Loué',
+            inactive:'⏸️ Annonce désactivée',
         }
-        toast.success(newStatus === 'active' ? 'Annonce réactivée' : 'Annonce désactivée')
+        toast.success(messages[newStatus])
         load()
     }
 
@@ -343,40 +350,84 @@ function MyListings({ user }) {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {listings.map(p => (
-                        <div key={p.id} className="bg-surface-container-lowest rounded-2xl overflow-hidden border border-outline-variant/10">
-                            <div className="h-44 bg-surface-container overflow-hidden relative">
-                                {p.images?.[0]
-                                    ? <img src={p.images[0]} alt={p.title} className="w-full h-full object-cover" />
-                                    : <div className="w-full h-full flex items-center justify-center">
-                                        <Icon name="home" className="text-[48px] text-outline-variant" />
+                    {listings.map(p => {
+                        const cfg = statusConfig[p.status] || statusConfig.inactive
+                        return (
+                            <div key={p.id} className="bg-surface-container-lowest rounded-2xl overflow-hidden border border-outline-variant/10">
+
+                                {/* Image */}
+                                <div className="h-44 bg-surface-container overflow-hidden relative">
+                                    {p.images?.[0]
+                                        ? <img src={p.images[0]} alt={p.title} className="w-full h-full object-cover" />
+                                        : <div className="w-full h-full flex items-center justify-center">
+                                            <Icon name="home" className="text-[48px] text-outline-variant" />
+                                          </div>
+                                    }
+
+                                    {/* Badge statut */}
+                                    <span className={`absolute top-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-semibold flex items-center gap-1 ${cfg.bg} ${cfg.text}`}>
+                                        <Icon name={cfg.icon} className="text-[12px]" />
+                                        {cfg.label}
+                                    </span>
+
+                                    {/* Overlay si vendu/loué */}
+                                    {(p.status === 'sold' || p.status === 'rented') && (
+                                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                            <span className={`text-white font-extrabold text-2xl uppercase tracking-widest rotate-[-15deg] border-4 border-white px-4 py-1 rounded-lg ${p.status === 'sold' ? 'bg-red-600/80' : 'bg-purple-600/80'}`}>
+                                                {p.status === 'sold' ? 'Vendu' : 'Loué'}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Infos */}
+                                <div className="p-4">
+                                    <p className="text-sm font-bold text-on-surface truncate mb-1">{p.title}</p>
+                                    <p className="text-xs text-on-surface-variant mb-2">{p.city} · {typeLabel[p.type]}</p>
+                                    <p className="text-base font-extrabold text-primary mb-3">{fmt(p.price)}</p>
+
+                                    {/* Actions */}
+                                    <div className="flex gap-2 relative">
+
+                                        {/* Bouton changer statut */}
+                                        <div className="flex-1 relative">
+                                            <button
+                                                onClick={() => setStatusMenu(statusMenu === p.id ? null : p.id)}
+                                                className={`w-full py-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1 ${cfg.bg} ${cfg.text} hover:opacity-80`}
+                                            >
+                                                <Icon name={cfg.icon} className="text-[14px]" />
+                                                {cfg.label}
+                                                <Icon name="expand_more" className="text-[14px]" />
+                                            </button>
+
+                                            {/* Dropdown statuts */}
+                                            {statusMenu === p.id && (
+                                                <div className="absolute left-0 top-full mt-1 w-44 bg-white rounded-xl shadow-xl border border-gray-100 z-20 overflow-hidden">
+                                                    {Object.entries(statusConfig).map(([key, val]) => (
+                                                        <button
+                                                            key={key}
+                                                            onClick={() => handleSetStatus(p.id, key)}
+                                                            className={`w-full px-4 py-2.5 text-xs font-medium text-left flex items-center gap-2 hover:bg-gray-50 transition-colors ${p.status === key ? 'opacity-40 cursor-default' : ''}`}
+                                                            disabled={p.status === key}
+                                                        >
+                                                            <Icon name={val.icon} className={`text-[16px] ${val.text}`} />
+                                                            <span className={val.text}>{val.label}</span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Supprimer */}
+                                        <button onClick={() => handleDelete(p.id)}
+                                            className="p-2 bg-surface-container text-outline hover:bg-red-100 hover:text-red-600 rounded-lg transition-colors">
+                                            <Icon name="delete" className="text-[16px]" />
+                                        </button>
                                     </div>
-                                }
-                                <span className={`absolute top-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-semibold ${p.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-surface-container text-outline'
-                                    }`}>
-                                    {p.status === 'active' ? 'Active' : 'Inactive'}
-                                </span>
-                            </div>
-                            <div className="p-4">
-                                <p className="text-sm font-bold text-on-surface truncate mb-1">{p.title}</p>
-                                <p className="text-xs text-on-surface-variant mb-2">{p.city} · {typeLabel[p.type]}</p>
-                                <p className="text-base font-extrabold text-primary mb-3">{fmt(p.price)}</p>
-                                <div className="flex gap-2">
-                                    <button onClick={() => handleToggleStatus(p.id, p.status)}
-                                        className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${p.status === 'active'
-                                            ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
-                                            : 'bg-green-100 text-green-800 hover:bg-green-200'
-                                            }`}>
-                                        {p.status === 'active' ? 'Désactiver' : 'Réactiver'}
-                                    </button>
-                                    <button onClick={() => handleDelete(p.id)}
-                                        className="p-2 bg-surface-container text-outline hover:bg-red-100 hover:text-red-600 rounded-lg transition-colors">
-                                        <Icon name="delete" className="text-[16px]" />
-                                    </button>
                                 </div>
                             </div>
-                        </div>
-                    ))}
+                        )
+                    })}
                 </div>
             )}
         </div>
@@ -385,16 +436,17 @@ function MyListings({ user }) {
 
 // ─── Dashboard overview ──────────────────────────────────────────────────────
 function SellerDashboard({ user, onNavigate }) {
-    const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0 })
+    const [stats, setStats] = useState({ total: 0, active: 0, sold: 0, rented: 0 })
 
     useEffect(() => {
         supabase.from('properties').select('status').eq('user_id', user.id)
             .then(({ data }) => {
                 if (!data) return
                 setStats({
-                    total: data.length,
+                    total:  data.length,
                     active: data.filter(p => p.status === 'active').length,
-                    inactive: data.filter(p => p.status !== 'active').length,
+                    sold:   data.filter(p => p.status === 'sold').length,
+                    rented: data.filter(p => p.status === 'rented').length,
                 })
             })
     }, [user])
@@ -410,11 +462,12 @@ function SellerDashboard({ user, onNavigate }) {
                 <p className="text-on-surface-variant">Gérez vos annonces immobilières depuis ce tableau de bord.</p>
             </header>
 
-            <div className="grid grid-cols-3 gap-5 mb-10">
+            <div className="grid grid-cols-4 gap-5 mb-10">
                 {[
-                    { label: 'Total annonces', value: stats.total, icon: 'domain', bg: 'bg-primary', text: 'text-white' },
-                    { label: 'Actives', value: stats.active, icon: 'check_circle', bg: 'bg-green-100', text: 'text-green-800' },
-                    { label: 'Inactives', value: stats.inactive, icon: 'pause_circle', bg: 'bg-amber-100', text: 'text-amber-800' },
+                    { label: 'Total annonces', value: stats.total,  icon: 'domain',        bg: 'bg-primary',      text: 'text-white' },
+                    { label: 'Actives',         value: stats.active, icon: 'check_circle',  bg: 'bg-green-100',    text: 'text-green-800' },
+                    { label: 'Vendus',          value: stats.sold,   icon: 'sell',          bg: 'bg-red-100',      text: 'text-red-800' },
+                    { label: 'Loués',           value: stats.rented, icon: 'key',           bg: 'bg-purple-100',   text: 'text-purple-800' },
                 ].map(s => (
                     <div key={s.label} className={`${s.bg} ${s.text} p-6 rounded-xl flex flex-col gap-3`}>
                         <Icon name={s.icon} className="text-[24px] opacity-80" />
