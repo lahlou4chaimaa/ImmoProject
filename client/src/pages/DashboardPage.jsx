@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import NotificationsBell from '../components/NotificationsBell'
 
 function Icon({ name, className = '' }) {
     return (
@@ -13,7 +14,6 @@ function Icon({ name, className = '' }) {
     )
 }
 
-// Sidebar 100% user — aucun lien admin, aucune condition isAdmin
 function Sidebar({ displayName, initial, avatarUrl, unread, onSignOut }) {
     const links = [
         { icon: 'dashboard', label: 'Dashboard', to: '/dashboard', active: true },
@@ -124,13 +124,12 @@ export default function DashboardPage() {
                             Voici un aperçu de vos activités immobilières.
                         </p>
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex gap-3 items-center">
                         <Link to="/annonces" className="p-3 bg-surface-container-highest text-on-surface rounded-full hover:bg-surface-container-high transition-colors">
                             <Icon name="search" className="text-[22px]" />
                         </Link>
-                        <button className="p-3 bg-surface-container-highest text-on-surface rounded-full hover:bg-surface-container-high transition-colors">
-                            <Icon name="notifications" className="text-[22px]" />
-                        </button>
+                        {/* ✅ NotificationsBell remplace l'ancien bouton notifications */}
+                        <NotificationsBell />
                     </div>
                 </header>
 

@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import Sidebar from '../components/Sidebar'
 import toast from 'react-hot-toast'
+import AvisClients from '../components/AvisClients'
 
 function Icon({ name, filled = false, className = '' }) {
     return (
@@ -37,7 +38,6 @@ export default function AnnonceDetailPage() {
         const load = async () => {
             setLoading(true)
             try {
-                // Charger la propriété
                 const { data, error } = await supabase
                     .from('properties')
                     .select('*')
@@ -46,7 +46,6 @@ export default function AnnonceDetailPage() {
                 if (error) throw error
                 setProperty(data)
 
-                // Vérifier si favori
                 if (user) {
                     const { data: fav } = await supabase
                         .from('favorites')
@@ -115,7 +114,7 @@ export default function AnnonceDetailPage() {
 
                 <div className="grid grid-cols-12 gap-8">
 
-                    {/* Colonne gauche — Images + Détails */}
+                    {/* ── Colonne gauche — Images + Détails ── */}
                     <div className="col-span-12 lg:col-span-8">
 
                         {/* Image principale */}
@@ -244,7 +243,9 @@ export default function AnnonceDetailPage() {
                                     <Icon name="location_on" className="text-primary text-[24px]" />
                                     <div>
                                         <p className="font-medium text-on-surface">{property.city}</p>
-                                        {property.address && <p className="text-sm text-on-surface-variant">{property.address}</p>}
+                                        {property.address && (
+                                            <p className="text-sm text-on-surface-variant">{property.address}</p>
+                                        )}
                                     </div>
                                     <button
                                         onClick={() => navigate('/carte')}
@@ -255,9 +256,14 @@ export default function AnnonceDetailPage() {
                                 </div>
                             </div>
                         )}
-                    </div>
 
-                    {/* Colonne droite — Contact */}
+                        {/* ✅ Avis clients */}
+                        <AvisClients propertyId={property.id} />
+
+                    </div>
+                    {/* ── fin colonne gauche ── */}
+
+                    {/* ── Colonne droite — Contact ── */}
                     <div className="col-span-12 lg:col-span-4">
                         <div className="sticky top-10">
 
@@ -303,6 +309,8 @@ export default function AnnonceDetailPage() {
                             </div>
                         </div>
                     </div>
+                    {/* ── fin colonne droite ── */}
+
                 </div>
 
                 {/* Footer */}
@@ -313,6 +321,7 @@ export default function AnnonceDetailPage() {
                         <a href="#" className="text-outline hover:text-on-surface">CGU</a>
                     </div>
                 </footer>
+
             </main>
         </div>
     )

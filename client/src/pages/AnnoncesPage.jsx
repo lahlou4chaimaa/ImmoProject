@@ -83,12 +83,14 @@ function PropertyCard({ property, isFavorite, onToggleFavorite }) {
     return (
         <div className="group bg-surface-container-lowest rounded-2xl overflow-hidden border border-outline-variant/10 hover:border-primary/20 hover:shadow-lg transition-all duration-300">
             {/* Image */}
-            <div className="relative overflow-hidden h-52">
+            {/* Image */}
+            <div className="relative overflow-hidden" style={{ height: 220 }}>
                 {property.images?.[0] ? (
                     <img
-                        src={property.images[0]}
-                        alt={property.title}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    src={property.images[0]}
+                    alt={property.title}
+                    className="w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    style={{ height: 220, width: "100%", objectFit: "cover", objectPosition: "center", display: "block" }}
                     />
                 ) : (
                     <div className="w-full h-full bg-surface-container flex items-center justify-center">
