@@ -5,6 +5,7 @@ import { useAuth } from '../hooks/useAuth'
 import Sidebar from '../components/Sidebar'
 import toast from 'react-hot-toast'
 import AvisClients from '../components/AvisClients'
+import ShareButton from '../components/ShareButton'
 
 function Icon({ name, filled = false, className = '' }) {
     return (
@@ -173,6 +174,13 @@ export default function AnnonceDetailPage() {
     const typeLabel = { sale: 'Vente', rent: 'Location', land: 'Terrain' }
     const typeColor = { sale: 'bg-blue-500', rent: 'bg-teal-500', land: 'bg-amber-500' }
 
+    const statusConfig = {
+        sold:   { label: 'Vendu',  banner: "Ce bien a été vendu et n'est plus disponible." },
+        rented: { label: 'Loué',   banner: "Ce bien a été loué et n'est plus disponible." },
+    }
+
+    const isUnavailable = property?.status === 'sold' || property?.status === 'rented'
+
     useEffect(() => {
         const loadProperty = async () => {
             setLoading(true)
@@ -249,6 +257,7 @@ export default function AnnonceDetailPage() {
     if (!property) return null
 
     const images = property.images || []
+    const statusCfg = statusConfig[property.status]
 
     return (
         <div className="bg-background text-on-surface flex min-h-screen font-body">
@@ -267,9 +276,31 @@ export default function AnnonceDetailPage() {
                     Retour aux annonces
                 </button>
 
+                {/* Bannière Vendu / Loué */}
+                {isUnavailable && (
+                    <div className={`mb-6 px-5 py-4 rounded-xl flex items-center gap-3 ${
+                        property.status === 'sold'
+                            ? 'bg-red-50 border border-red-200'
+                            : 'bg-purple-50 border border-purple-200'
+                    }`}>
+                        <Icon
+                            name={property.status === 'sold' ? 'sell' : 'key'}
+                            className={`text-[24px] ${property.status === 'sold' ? 'text-red-600' : 'text-purple-600'}`}
+                        />
+                        <div>
+                            <p className={`font-bold text-sm ${property.status === 'sold' ? 'text-red-800' : 'text-purple-800'}`}>
+                                Bien {property.status === 'sold' ? 'Vendu' : 'Loué'}
+                            </p>
+                            <p className={`text-xs ${property.status === 'sold' ? 'text-red-600' : 'text-purple-600'}`}>
+                                {statusCfg?.banner}
+                            </p>
+                        </div>
+                    </div>
+                )}
+
                 <div className="grid grid-cols-12 gap-8">
 
-                    {/* ── Colonne gauche — Images + Détails ── */}
+                    {/* ── Colonne gauche ── */}
                     <div className="col-span-12 lg:col-span-8">
 
                         {/* Image principale */}
@@ -278,7 +309,7 @@ export default function AnnonceDetailPage() {
                                 <img
                                     src={images[selectedImage]}
                                     alt={property.title}
-                                    className="w-full h-full object-cover"
+                                    className={`w-full h-full object-cover ${isUnavailable ? 'opacity-60' : ''}`}
                                 />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center">
@@ -291,14 +322,27 @@ export default function AnnonceDetailPage() {
                                 {typeLabel[property.type] || property.type}
                             </span>
 
+                            {/* Badge Vendu / Loué */}
+                            {isUnavailable && (
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <span className={`text-white font-extrabold text-4xl uppercase tracking-widest rotate-[-15deg] border-4 border-white px-6 py-2 rounded-xl ${
+                                        property.status === 'sold' ? 'bg-red-600/85' : 'bg-purple-600/85'
+                                    }`}>
+                                        {property.status === 'sold' ? 'Vendu' : 'Loué'}
+                                    </span>
+                                </div>
+                            )}
+
                             {/* Bouton favori */}
-                            <button
-                                onClick={toggleFavorite}
-                                className="absolute top-4 right-4 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:bg-white transition-colors"
-                            >
-                                <Icon name="favorite" filled={isFavorite}
-                                    className={`text-[20px] ${isFavorite ? 'text-error' : 'text-outline-variant'}`} />
-                            </button>
+                            {!isUnavailable && (
+                                <button
+                                    onClick={toggleFavorite}
+                                    className="absolute top-4 right-4 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:bg-white transition-colors"
+                                >
+                                    <Icon name="favorite" filled={isFavorite}
+                                        className={`text-[20px] ${isFavorite ? 'text-error' : 'text-outline-variant'}`} />
+                                </button>
+                            )}
                         </div>
 
                         {/* Miniatures */}
@@ -330,11 +374,16 @@ export default function AnnonceDetailPage() {
                                 </p>
                             </div>
                             <div className="text-right">
-                                <p className="text-3xl font-headline font-extrabold text-primary">
+                                <p className={`text-3xl font-headline font-extrabold ${isUnavailable ? 'text-outline line-through' : 'text-primary'}`}>
                                     {fmt(property.price)}
                                 </p>
-                                {property.type === 'rent' && (
+                                {property.type === 'rent' && !isUnavailable && (
                                     <p className="text-xs text-on-surface-variant mt-1">/ mois</p>
+                                )}
+                                {isUnavailable && (
+                                    <p className={`text-sm font-bold mt-1 ${property.status === 'sold' ? 'text-red-600' : 'text-purple-600'}`}>
+                                        {property.status === 'sold' ? '🏷️ Vendu' : '🔑 Loué'}
+                                    </p>
                                 )}
                             </div>
                         </div>
@@ -390,7 +439,7 @@ export default function AnnonceDetailPage() {
                             </div>
                         )}
 
-                        {/* Localisation sur carte */}
+                        {/* Localisation */}
                         {property.lat && property.lng && (
                             <div className="mb-8">
                                 <h2 className="text-xl font-headline font-bold mb-4">Localisation</h2>
@@ -412,43 +461,58 @@ export default function AnnonceDetailPage() {
                             </div>
                         )}
 
-                        {/* ✅ Avis clients */}
+                        {/* Avis clients */}
                         <AvisClients propertyId={property.id} />
 
                     </div>
-                    {/* ── fin colonne gauche ── */}
 
-                   {/* ── Colonne droite — Contact ── */}
-<div className="col-span-12 lg:col-span-4">
-    <div className="sticky top-10">
-        <ContactCard property={property} user={user} />
+                    {/* ── Colonne droite — Contact ── */}
+                    <div className="col-span-12 lg:col-span-4">
+                        <div className="sticky top-10">
 
-        {/* Favori */}
-        <button
-            onClick={toggleFavorite}
-            className={`w-full py-3 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2 border mt-4 ${
-                isFavorite
-                    ? 'bg-error/10 text-error border-error/20 hover:bg-error/20'
-                    : 'border-outline-variant/30 text-on-surface hover:bg-surface-container-low'
-            }`}
-        >
-            <Icon name="favorite" filled={isFavorite} className="text-[18px]" />
-            {isFavorite ? 'Retirer des favoris' : 'Sauvegarder'}
-        </button>
+                            {/* Card contact */}
+                            <div className="bg-surface-container-lowest rounded-2xl p-6 border border-outline-variant/15 mb-4">
+                                <h3 className="font-headline font-bold text-lg mb-1">Intéressé par ce bien ?</h3>
+                                <p className="text-xs text-on-surface-variant mb-5">Contactez le propriétaire directement</p>
 
-        {/* Infos publication */}
-        <div className="mt-4 p-4 bg-surface-container-low rounded-xl">
-            <p className="text-xs text-on-surface-variant flex items-center gap-1 mb-1">
-                <Icon name="calendar_today" className="text-[14px]" />
-                Publié le {new Date(property.created_at).toLocaleDateString('fr-FR')}
-            </p>
-            <p className="text-xs text-on-surface-variant flex items-center gap-1">
-                <Icon name="visibility" className="text-[14px]" />
-                {property.views || 0} vue{property.views !== 1 ? 's' : ''}
-            </p>
-        </div>
-    </div>
-</div>
+                                <button className="w-full py-3 bg-primary text-white rounded-xl font-medium text-sm hover:opacity-90 transition-all flex items-center justify-center gap-2 mb-3">
+                                    <Icon name="chat_bubble" className="text-[18px]" />
+                                    Envoyer un message
+                                </button>
+
+                                <button className="w-full py-3 border border-outline-variant/30 text-on-surface rounded-xl font-medium text-sm hover:bg-surface-container-low transition-all flex items-center justify-center gap-2">
+                                    <Icon name="call" className="text-[18px]" />
+                                    Demander un rappel
+                                </button>
+                            </div>
+
+                            {/* Favori */}
+                            <button
+                                onClick={toggleFavorite}
+                                className={`w-full py-3 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2 border ${
+                                    isFavorite
+                                        ? 'bg-error/10 text-error border-error/20 hover:bg-error/20'
+                                        : 'border-outline-variant/30 text-on-surface hover:bg-surface-container-low'
+                                }`}
+                            >
+                                <Icon name="favorite" filled={isFavorite} className="text-[18px]" />
+                                {isFavorite ? 'Retirer des favoris' : 'Sauvegarder'}
+                            </button>
+
+                            {/* Infos publication */}
+                            <div className="mt-4 p-4 bg-surface-container-low rounded-xl">
+                                <p className="text-xs text-on-surface-variant flex items-center gap-1 mb-1">
+                                    <Icon name="calendar_today" className="text-[14px]" />
+                                    Publié le {new Date(property.created_at).toLocaleDateString('fr-FR')}
+                                </p>
+                                <p className="text-xs text-on-surface-variant flex items-center gap-1">
+                                    <Icon name="visibility" className="text-[14px]" />
+                                    {property.views || 0} vue{property.views !== 1 ? 's' : ''}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    {/* ── fin colonne droite ── */}
 
                 </div>
 
