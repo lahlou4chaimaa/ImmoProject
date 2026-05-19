@@ -10,8 +10,9 @@ import AnnoncesPage from './pages/AnnoncesPage'
 import AdminPage from './pages/AdminPage'
 import MapPage from './pages/MapPage'
 import AnnonceDetailPage from './pages/AnnonceDetailPage'
-import SellerPage from './pages/SellerPage'
+import SellerPage from './pages/Sellerpage'
 import Tutorial from './components/Tutorial'
+import MessagesPage from './pages/MessagesPage'
 import './App.css'
 import StudioPage from './pages/StudioPage'
 
@@ -105,7 +106,7 @@ function App() {
                     {/* Acheteur */}
                     <Route path="/dashboard" element={<BuyerRoute><DashboardPage /></BuyerRoute>} />
                     <Route path="/annonces" element={<BuyerRoute><AnnoncesPage /></BuyerRoute>} />
-                    <Route path="/favoris" element={<BuyerRoute><FavorisPage /></BuyerRoute>} />
+                    <Route path="/favoris" element={<Navigate to="/dashboard" replace />} />
 
                     {/* Vendeur */}
                     <Route path="/seller" element={<SellerRoute><SellerPage /></SellerRoute>} />
@@ -117,7 +118,7 @@ function App() {
                     <Route path="/carte" element={<ProtectedRoute><MapPage /></ProtectedRoute>} />
                     <Route path="/annonce/:id" element={<ProtectedRoute><AnnonceDetailPage /></ProtectedRoute>} />
                     <Route path="/studio" element={<ProtectedRoute><StudioPage /></ProtectedRoute>} />
-
+<Route path="/messages" element={<BuyerRoute><MessagesPage /></BuyerRoute>} />
                     <Route path="/" element={<Navigate to="/auth" replace />} />
                     <Route path="*" element={<Navigate to="/auth" replace />} />
                 </Routes>

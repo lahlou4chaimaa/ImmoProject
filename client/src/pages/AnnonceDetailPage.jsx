@@ -17,6 +17,7 @@ function Icon({ name, filled = false, className = '' }) {
         </span>
     )
 }
+
 // ─── Composant formulaire de contact ────────────────────────────────────────
 function ContactCard({ property, user }) {
     const [showForm, setShowForm] = useState(false)
@@ -24,7 +25,6 @@ function ContactCard({ property, user }) {
     const [sending, setSending] = useState(false)
     const [sent, setSent] = useState(false)
 
-    // Empêche d'envoyer un message à soi-même
     const isSeller = user?.id === property.user_id
 
     const handleSend = async () => {
@@ -58,7 +58,6 @@ function ContactCard({ property, user }) {
                 Contactez le propriétaire sans partager votre numéro
             </p>
 
-            {/* État : envoyé avec succès */}
             {sent ? (
                 <div className="flex flex-col items-center gap-3 py-4 text-center">
                     <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
@@ -76,7 +75,6 @@ function ContactCard({ property, user }) {
                     </button>
                 </div>
             ) : !showForm ? (
-                /* Boutons initiaux */
                 <div className="flex flex-col gap-3">
                     {isSeller ? (
                         <div className="w-full py-3 bg-surface-container text-on-surface-variant rounded-xl text-sm text-center">
@@ -97,9 +95,7 @@ function ContactCard({ property, user }) {
                     </button>
                 </div>
             ) : (
-                /* Formulaire message */
                 <div className="flex flex-col gap-3">
-                    {/* Messages rapides */}
                     <div>
                         <p className="text-xs text-on-surface-variant mb-2 font-medium">Messages rapides :</p>
                         <div className="flex flex-col gap-1.5">
@@ -119,7 +115,6 @@ function ContactCard({ property, user }) {
                         </div>
                     </div>
 
-                    {/* Zone de texte */}
                     <textarea
                         value={message}
                         onChange={e => setMessage(e.target.value)}
@@ -133,7 +128,6 @@ function ContactCard({ property, user }) {
                         Votre numéro de téléphone ne sera jamais partagé.
                     </p>
 
-                    {/* Actions */}
                     <div className="flex gap-2">
                         <button
                             onClick={() => { setShowForm(false); setMessage('') }}
@@ -157,6 +151,7 @@ function ContactCard({ property, user }) {
         </div>
     )
 }
+
 export default function AnnonceDetailPage() {
     const { id } = useParams()
     const { user } = useAuth()
@@ -470,20 +465,9 @@ export default function AnnonceDetailPage() {
                     <div className="col-span-12 lg:col-span-4">
                         <div className="sticky top-10">
 
-                            {/* Card contact */}
-                            <div className="bg-surface-container-lowest rounded-2xl p-6 border border-outline-variant/15 mb-4">
-                                <h3 className="font-headline font-bold text-lg mb-1">Intéressé par ce bien ?</h3>
-                                <p className="text-xs text-on-surface-variant mb-5">Contactez le propriétaire directement</p>
-
-                                <button className="w-full py-3 bg-primary text-white rounded-xl font-medium text-sm hover:opacity-90 transition-all flex items-center justify-center gap-2 mb-3">
-                                    <Icon name="chat_bubble" className="text-[18px]" />
-                                    Envoyer un message
-                                </button>
-
-                                <button className="w-full py-3 border border-outline-variant/30 text-on-surface rounded-xl font-medium text-sm hover:bg-surface-container-low transition-all flex items-center justify-center gap-2">
-                                    <Icon name="call" className="text-[18px]" />
-                                    Demander un rappel
-                                </button>
+                            {/* ✅ ContactCard fonctionnel */}
+                            <div className="mb-4">
+                                <ContactCard property={property} user={user} />
                             </div>
 
                             {/* Favori */}
@@ -510,6 +494,7 @@ export default function AnnonceDetailPage() {
                                     {property.views || 0} vue{property.views !== 1 ? 's' : ''}
                                 </p>
                             </div>
+
                         </div>
                     </div>
                     {/* ── fin colonne droite ── */}

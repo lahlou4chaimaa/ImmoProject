@@ -443,21 +443,81 @@ function MyListings({ user }) {
 // ─── Dashboard overview ──────────────────────────────────────────────────────
 function SellerDashboard({ user, onNavigate }) {
     const [stats, setStats] = useState({ total: 0, active: 0, sold: 0, rented: 0 })
+    const [viewStats, setViewStats] = useState([])      // vues par annonce
+    const [contactStats, setContactStats] = useState([]) // messages reçus par annonce
+    const [loadingStats, setLoadingStats] = useState(true)
 
     useEffect(() => {
-        supabase.from('properties').select('status').eq('user_id', user.id)
-            .then(({ data }) => {
-                if (!data) return
-                setStats({
-                    total:  data.length,
-                    active: data.filter(p => p.status === 'active').length,
-                    sold:   data.filter(p => p.status === 'sold').length,
-                    rented: data.filter(p => p.status === 'rented').length,
-                })
-            })
+        if (!user) return
+        const load = async () => {
+            setLoadingStats(true)
+            try {
+                // 1. Statuts des annonces
+                const { data: props } = await supabase
+                    .from('properties')
+                    .select('id, title, status, images, city, type, price')
+                    .eq('user_id', user.id)
+                    .order('created_at', { ascending: false })
+
+                if (props) {
+                    setStats({
+                        total:  props.length,
+                        active: props.filter(p => p.status === 'active').length,
+                        sold:   props.filter(p => p.status === 'sold').length,
+                        rented: props.filter(p => p.status === 'rented').length,
+                    })
+
+                    // 2. Vues par annonce
+                    const propIds = props.map(p => p.id)
+                    if (propIds.length > 0) {
+                        const { data: views } = await supabase
+                            .from('property_views')
+                            .select('property_id')
+                            .in('property_id', propIds)
+
+                        // Compter les vues par property_id
+                        const viewCounts = {}
+                        ;(views || []).forEach(v => {
+                            viewCounts[v.property_id] = (viewCounts[v.property_id] || 0) + 1
+                        })
+
+                        // 3. Messages (contacts) par annonce
+                        const { data: messages } = await supabase
+                            .from('messages')
+                            .select('property_id')
+                            .in('property_id', propIds)
+
+                        const msgCounts = {}
+                        ;(messages || []).forEach(m => {
+                            msgCounts[m.property_id] = (msgCounts[m.property_id] || 0) + 1
+                        })
+
+                        // Fusionner avec les annonces
+                        const enriched = props.map(p => ({
+                            ...p,
+                            views: viewCounts[p.id] || 0,
+                            contacts: msgCounts[p.id] || 0,
+                        }))
+                        // Trier par vues décroissantes
+                        setViewStats(enriched.sort((a, b) => b.views - a.views))
+                        setContactStats([...enriched].sort((a, b) => b.contacts - a.contacts))
+                    }
+                }
+            } catch (err) {
+                console.error('Stats error:', err)
+            } finally {
+                setLoadingStats(false)
+            }
+        }
+        load()
     }, [user])
 
     const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0]
+    const fmt = (n) => new Intl.NumberFormat('fr-MA', { style: 'currency', currency: 'MAD', maximumFractionDigits: 0 }).format(n)
+    const typeColor = { sale: 'bg-blue-500', rent: 'bg-teal-500', land: 'bg-amber-500' }
+    const typeLabel = { sale: 'Vente', rent: 'Location', land: 'Terrain' }
+    const totalViews = viewStats.reduce((s, p) => s + p.views, 0)
+    const totalContacts = contactStats.reduce((s, p) => s + p.contacts, 0)
 
     return (
         <div>
@@ -465,15 +525,16 @@ function SellerDashboard({ user, onNavigate }) {
                 <h2 className="text-4xl font-headline font-extrabold tracking-tight text-primary mb-2">
                     Bonjour, {displayName} 👋
                 </h2>
-                <p className="text-on-surface-variant">Gérez vos annonces immobilières depuis ce tableau de bord.</p>
+                <p className="text-on-surface-variant">Gérez vos annonces et suivez vos performances.</p>
             </header>
 
-            <div className="grid grid-cols-4 gap-5 mb-10">
+            {/* ── Stat cards ── */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 mb-10">
                 {[
-                    { label: 'Total annonces', value: stats.total,  icon: 'domain',        bg: 'bg-primary',      text: 'text-white' },
-                    { label: 'Actives',         value: stats.active, icon: 'check_circle',  bg: 'bg-green-100',    text: 'text-green-800' },
-                    { label: 'Vendus',          value: stats.sold,   icon: 'sell',          bg: 'bg-red-100',      text: 'text-red-800' },
-                    { label: 'Loués',           value: stats.rented, icon: 'key',           bg: 'bg-purple-100',   text: 'text-purple-800' },
+                    { label: 'Total annonces', value: stats.total,  icon: 'domain',       bg: 'bg-primary',    text: 'text-white' },
+                    { label: 'Actives',         value: stats.active, icon: 'check_circle', bg: 'bg-green-100',  text: 'text-green-800' },
+                    { label: 'Vendus',          value: stats.sold,   icon: 'sell',         bg: 'bg-red-100',    text: 'text-red-800' },
+                    { label: 'Loués',           value: stats.rented, icon: 'key',          bg: 'bg-purple-100', text: 'text-purple-800' },
                 ].map(s => (
                     <div key={s.label} className={`${s.bg} ${s.text} p-6 rounded-xl flex flex-col gap-3`}>
                         <Icon name={s.icon} className="text-[24px] opacity-80" />
@@ -485,6 +546,148 @@ function SellerDashboard({ user, onNavigate }) {
                 ))}
             </div>
 
+            {/* ── Résumé vues + contacts ── */}
+            <div className="grid grid-cols-2 gap-5 mb-10">
+                <div className="bg-surface-container-lowest rounded-2xl p-6 border border-outline-variant/10 flex items-center gap-5">
+                    <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <Icon name="visibility" className="text-primary text-[28px]" />
+                    </div>
+                    <div>
+                        <p className="text-3xl font-headline font-extrabold text-on-surface">
+                            {loadingStats ? '...' : totalViews}
+                        </p>
+                        <p className="text-xs text-on-surface-variant uppercase tracking-widest mt-1">Vues totales</p>
+                        <p className="text-[10px] text-outline mt-0.5">Sur toutes vos annonces</p>
+                    </div>
+                </div>
+                <div className="bg-surface-container-lowest rounded-2xl p-6 border border-outline-variant/10 flex items-center gap-5">
+                    <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                        <Icon name="chat_bubble" className="text-green-700 text-[28px]" />
+                    </div>
+                    <div>
+                        <p className="text-3xl font-headline font-extrabold text-on-surface">
+                            {loadingStats ? '...' : totalContacts}
+                        </p>
+                        <p className="text-xs text-on-surface-variant uppercase tracking-widest mt-1">Contacts reçus</p>
+                        <p className="text-[10px] text-outline mt-0.5">Messages d'acheteurs</p>
+                    </div>
+                </div>
+            </div>
+
+            {/* ── Tableau performances par annonce ── */}
+            {!loadingStats && viewStats.length > 0 && (
+                <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 mb-10 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-outline-variant/10 flex items-center justify-between">
+                        <h3 className="font-headline font-bold text-on-surface flex items-center gap-2">
+                            <Icon name="bar_chart" className="text-primary text-[20px]" />
+                            Performance par annonce
+                        </h3>
+                        <p className="text-xs text-on-surface-variant">{viewStats.length} annonce{viewStats.length > 1 ? 's' : ''}</p>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full">
+                            <thead>
+                                <tr className="border-b border-outline-variant/10">
+                                    {['Annonce', 'Type', 'Statut', 'Prix', 'Vues', 'Contacts', 'Taux contact'].map(h => (
+                                        <th key={h} className="px-5 py-3 text-left text-[10px] font-semibold text-on-surface-variant uppercase tracking-widest whitespace-nowrap">{h}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-outline-variant/10">
+                                {viewStats.map(p => {
+                                    const tauxContact = p.views > 0 ? ((p.contacts / p.views) * 100).toFixed(1) : '0.0'
+                                    const statusCfg = {
+                                        active:   { label: 'Active',  cls: 'bg-green-100 text-green-800' },
+                                        sold:     { label: 'Vendu',   cls: 'bg-red-100 text-red-800' },
+                                        rented:   { label: 'Loué',    cls: 'bg-purple-100 text-purple-800' },
+                                        inactive: { label: 'Inactif', cls: 'bg-gray-100 text-gray-600' },
+                                    }[p.status] || { label: p.status, cls: 'bg-gray-100 text-gray-600' }
+
+                                    return (
+                                        <tr key={p.id} className="hover:bg-surface-container-low transition-colors">
+                                            {/* Annonce */}
+                                            <td className="px-5 py-4">
+                                                <div className="flex items-center gap-3 max-w-[200px]">
+                                                    {p.images?.[0] ? (
+                                                        <img src={p.images[0]} alt=""
+                                                            className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                                                    ) : (
+                                                        <div className="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center flex-shrink-0">
+                                                            <Icon name="home" className="text-outline-variant text-[18px]" />
+                                                        </div>
+                                                    )}
+                                                    <div className="min-w-0">
+                                                        <p className="text-sm font-semibold text-on-surface truncate">{p.title}</p>
+                                                        <p className="text-[10px] text-on-surface-variant">{p.city}</p>
+                                                    </div>
+                                                </div>
+                                            </td>
+
+                                            {/* Type */}
+                                            <td className="px-5 py-4">
+                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold text-white ${typeColor[p.type] || 'bg-primary'}`}>
+                                                    {typeLabel[p.type] || p.type}
+                                                </span>
+                                            </td>
+
+                                            {/* Statut */}
+                                            <td className="px-5 py-4">
+                                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold ${statusCfg.cls}`}>
+                                                    {statusCfg.label}
+                                                </span>
+                                            </td>
+
+                                            {/* Prix */}
+                                            <td className="px-5 py-4 text-sm font-bold text-primary whitespace-nowrap">
+                                                {fmt(p.price)}
+                                            </td>
+
+                                            {/* Vues */}
+                                            <td className="px-5 py-4">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex-1 bg-surface-container rounded-full h-1.5 w-16">
+                                                        <div
+                                                            className="bg-primary h-1.5 rounded-full transition-all"
+                                                            style={{ width: `${totalViews > 0 ? (p.views / Math.max(...viewStats.map(x => x.views))) * 100 : 0}%` }}
+                                                        />
+                                                    </div>
+                                                    <span className="text-sm font-bold text-on-surface">{p.views}</span>
+                                                </div>
+                                            </td>
+
+                                            {/* Contacts */}
+                                            <td className="px-5 py-4">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex-1 bg-surface-container rounded-full h-1.5 w-16">
+                                                        <div
+                                                            className="bg-green-500 h-1.5 rounded-full transition-all"
+                                                            style={{ width: `${totalContacts > 0 ? (p.contacts / Math.max(...contactStats.map(x => x.contacts), 1)) * 100 : 0}%` }}
+                                                        />
+                                                    </div>
+                                                    <span className="text-sm font-bold text-on-surface">{p.contacts}</span>
+                                                </div>
+                                            </td>
+
+                                            {/* Taux contact */}
+                                            <td className="px-5 py-4">
+                                                <span className={`text-sm font-bold ${
+                                                    parseFloat(tauxContact) >= 10 ? 'text-green-600' :
+                                                    parseFloat(tauxContact) >= 5  ? 'text-amber-600' : 'text-outline'
+                                                }`}>
+                                                    {tauxContact}%
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    )
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* ── CTA nouvelle annonce ── */}
             <div className="bg-surface-container-lowest rounded-2xl p-8 border border-outline-variant/10 flex items-center justify-between">
                 <div>
                     <h3 className="text-xl font-headline font-bold mb-2">Publiez votre prochain bien</h3>
@@ -501,30 +704,59 @@ function SellerDashboard({ user, onNavigate }) {
 }
 // ─── Messages reçus par le vendeur ──────────────────────────────────────────
 function SellerMessages({ user }) {
-    const [messages, setMessages] = useState([])
-    const [loading, setLoading] = useState(true)
+    const [conversations, setConversations] = useState([])
     const [selected, setSelected] = useState(null)
+    const [thread, setThread] = useState([])
     const [reply, setReply] = useState('')
     const [sending, setSending] = useState(false)
+    const [loading, setLoading] = useState(true)
 
     const fmt = (d) => new Date(d).toLocaleDateString('fr-FR', {
-        day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
     })
 
-    const load = async () => {
+    const loadConversations = async () => {
         setLoading(true)
         try {
             const { data, error } = await supabase
                 .from('messages')
                 .select(`
                     id, content, read, created_at, property_id,
-                    sender_id,
+                    sender_id, receiver_id,
                     properties(id, title, images)
                 `)
-                .eq('receiver_id', user.id)
+                .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
                 .order('created_at', { ascending: false })
+
             if (error) throw error
-            setMessages(data || [])
+
+            // Grouper par property_id + autre_user_id pour avoir une conv par acheteur par annonce
+            const convMap = {}
+            ;(data || []).forEach(msg => {
+                const otherId = msg.sender_id === user.id ? msg.receiver_id : msg.sender_id
+                const key = `${msg.property_id}__${otherId}`
+
+                if (!convMap[key]) {
+                    convMap[key] = {
+                        key,
+                        property_id: msg.property_id,
+                        other_user_id: otherId,
+                        property: msg.properties,
+                        lastMessage: msg,
+                        unread: 0,
+                        messages: [],
+                    }
+                }
+                convMap[key].messages.push(msg)
+                if (!msg.read && msg.receiver_id === user.id) {
+                    convMap[key].unread++
+                }
+            })
+
+            const convList = Object.values(convMap).sort(
+                (a, b) => new Date(b.lastMessage.created_at) - new Date(a.lastMessage.created_at)
+            )
+            setConversations(convList)
         } catch (err) {
             toast.error('Erreur chargement des messages')
         } finally {
@@ -532,32 +764,60 @@ function SellerMessages({ user }) {
         }
     }
 
-    useEffect(() => { load() }, [user])
+    useEffect(() => { loadConversations() }, [user])
 
-    const handleOpen = async (msg) => {
-        setSelected(msg)
-        setReply('')
-        // Marquer comme lu
-        if (!msg.read) {
-            await supabase.from('messages').update({ read: true }).eq('id', msg.id)
-            setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, read: true } : m))
-        }
+    const openConversation = async (conv) => {
+    setSelected(conv)
+    setReply('')
+
+    // Charger tous les messages de cette conversation (property + les 2 users)
+    const { data: freshMessages } = await supabase
+        .from('messages')
+        .select('id, content, read, created_at, property_id, sender_id, receiver_id, properties(id, title, images)')
+        .eq('property_id', conv.property_id)
+        .in('sender_id', [user.id, conv.other_user_id])
+        .in('receiver_id', [user.id, conv.other_user_id])
+        .order('created_at', { ascending: true })
+
+    setThread(freshMessages || [])
+
+    // Marquer comme lus
+    const unreadIds = (freshMessages || [])
+        .filter(m => !m.read && m.receiver_id === user.id)
+        .map(m => m.id)
+
+    if (unreadIds.length > 0) {
+        await supabase.from('messages').update({ read: true }).in('id', unreadIds)
+        setConversations(prev => prev.map(c =>
+            c.key === conv.key ? { ...c, unread: 0 } : c
+        ))
     }
+}
 
     const handleReply = async () => {
-        if (!reply.trim()) return
+        if (!reply.trim() || !selected) return
         setSending(true)
         try {
-            const { error } = await supabase.from('messages').insert({
-                property_id: selected.property_id,
-                sender_id: user.id,
-                receiver_id: selected.sender_id,
-                content: reply.trim(),
-            })
+            const { data: newMsg, error } = await supabase
+                .from('messages')
+                .insert({
+                    property_id: selected.property_id,
+                    sender_id: user.id,
+                    receiver_id: selected.other_user_id,
+                    content: reply.trim(),
+                })
+                .select(`
+                    id, content, read, created_at, property_id,
+                    sender_id, receiver_id,
+                    properties(id, title, images)
+                `)
+                .single()
+
             if (error) throw error
-            toast.success('Réponse envoyée !')
+            setThread(prev => [...prev, newMsg])
             setReply('')
-            setSelected(null)
+            toast.success('Réponse envoyée !')
+            loadConversations()
         } catch (err) {
             toast.error(err.message || 'Erreur envoi')
         } finally {
@@ -565,7 +825,7 @@ function SellerMessages({ user }) {
         }
     }
 
-    const unreadCount = messages.filter(m => !m.read).length
+    const totalUnread = conversations.reduce((s, c) => s + c.unread, 0)
 
     if (loading) return (
         <div className="flex items-center justify-center py-20">
@@ -575,21 +835,21 @@ function SellerMessages({ user }) {
 
     return (
         <div>
-            <header className="mb-8 flex items-center gap-4">
-                <div>
-                    <h3 className="text-2xl font-headline font-extrabold text-on-surface">Messages reçus</h3>
-                    <p className="text-sm text-on-surface-variant mt-1">
-                        {messages.length} message{messages.length !== 1 ? 's' : ''}
-                        {unreadCount > 0 && (
-                            <span className="ml-2 px-2 py-0.5 bg-primary text-white text-[10px] rounded-full font-semibold">
-                                {unreadCount} non lu{unreadCount > 1 ? 's' : ''}
-                            </span>
-                        )}
-                    </p>
-                </div>
+            <header className="mb-8">
+                <h3 className="text-2xl font-headline font-extrabold text-on-surface flex items-center gap-3">
+                    Messages reçus
+                    {totalUnread > 0 && (
+                        <span className="px-2.5 py-0.5 bg-primary text-white text-xs rounded-full font-semibold">
+                            {totalUnread} non lu{totalUnread > 1 ? 's' : ''}
+                        </span>
+                    )}
+                </h3>
+                <p className="text-sm text-on-surface-variant mt-1">
+                    {conversations.length} conversation{conversations.length !== 1 ? 's' : ''}
+                </p>
             </header>
 
-            {messages.length === 0 ? (
+            {conversations.length === 0 ? (
                 <div className="text-center py-24 bg-surface-container-low rounded-2xl">
                     <Icon name="chat_bubble" className="text-[64px] text-outline-variant mb-3" />
                     <p className="text-on-surface-variant font-medium">Aucun message reçu pour l'instant</p>
@@ -598,116 +858,136 @@ function SellerMessages({ user }) {
             ) : (
                 <div className="grid grid-cols-12 gap-6">
 
-                    {/* Liste messages */}
+                    {/* ── Liste conversations ── */}
                     <div className="col-span-12 lg:col-span-5 flex flex-col gap-2">
-                        {messages.map(msg => (
+                        {conversations.map(conv => (
                             <button
-                                key={msg.id}
-                                onClick={() => handleOpen(msg)}
+                                key={conv.key}
+                                onClick={() => openConversation(conv)}
                                 className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
-                                    selected?.id === msg.id
+                                    selected?.key === conv.key
                                         ? 'border-primary bg-primary/5'
                                         : 'border-transparent bg-surface-container-lowest hover:border-outline-variant/30'
                                 }`}
                             >
                                 <div className="flex items-start gap-3">
-                                    {/* Avatar initiale */}
-                                    <div className="w-9 h-9 rounded-full bg-primary-container flex items-center justify-center text-primary text-sm font-bold flex-shrink-0">
-                                        A
-                                    </div>
+                                    {conv.property?.images?.[0] ? (
+                                        <img src={conv.property.images[0]} alt=""
+                                            className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
+                                    ) : (
+                                        <div className="w-12 h-12 rounded-xl bg-surface-container flex items-center justify-center flex-shrink-0">
+                                            <Icon name="home" className="text-outline-variant text-[22px]" />
+                                        </div>
+                                    )}
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center justify-between mb-0.5">
-                                            <p className={`text-sm font-semibold truncate ${!msg.read ? 'text-on-surface' : 'text-on-surface-variant'}`}>
-                                                Acheteur intéressé
+                                            <p className={`text-sm font-semibold truncate ${conv.unread > 0 ? 'text-on-surface' : 'text-on-surface-variant'}`}>
+                                                {conv.property?.title || 'Annonce'}
                                             </p>
-                                            {!msg.read && (
-                                                <span className="w-2 h-2 bg-primary rounded-full flex-shrink-0 ml-2" />
+                                            {conv.unread > 0 && (
+                                                <span className="w-5 h-5 bg-primary text-white text-[10px] rounded-full flex items-center justify-center flex-shrink-0 ml-1 font-bold">
+                                                    {conv.unread}
+                                                </span>
                                             )}
                                         </div>
-                                        <p className="text-xs text-on-surface-variant truncate mb-1">
-                                            📌 {msg.properties?.title || 'Annonce'}
+                                        <p className="text-xs text-outline flex items-center gap-0.5 mb-1">
+                                            <Icon name="person" className="text-[11px]" />
+                                            Acheteur · {conv.messages.length} message{conv.messages.length > 1 ? 's' : ''}
                                         </p>
-                                        <p className={`text-xs truncate ${!msg.read ? 'text-on-surface font-medium' : 'text-outline'}`}>
-                                            {msg.content}
+                                        <p className={`text-xs truncate ${conv.unread > 0 ? 'font-medium text-on-surface' : 'text-outline'}`}>
+                                            {conv.lastMessage.sender_id === user.id ? '✓ Vous : ' : ''}
+                                            {conv.lastMessage.content}
                                         </p>
-                                        <p className="text-[10px] text-outline mt-1.5">{fmt(msg.created_at)}</p>
+                                        <p className="text-[10px] text-outline mt-1">{fmt(conv.lastMessage.created_at)}</p>
                                     </div>
                                 </div>
                             </button>
                         ))}
                     </div>
 
-                    {/* Panneau détail + réponse */}
-                    <div className="col-span-12 lg:col-span-7">
+                    {/* ── Fil de conversation ── */}
+                    <div className="col-span-12 lg:col-span-7 flex flex-col">
                         {selected ? (
-                            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/15 overflow-hidden">
+                            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/15 overflow-hidden flex flex-col" style={{ maxHeight: '70vh' }}>
 
                                 {/* Header */}
-                                <div className="p-5 border-b border-outline-variant/15 flex items-center gap-4">
-                                    {selected.properties?.images?.[0] ? (
-                                        <img src={selected.properties.images[0]} alt=""
-                                            className="w-14 h-14 rounded-xl object-cover flex-shrink-0" />
+                                <div className="p-5 border-b border-outline-variant/15 flex items-center gap-4 flex-shrink-0">
+                                    {selected.property?.images?.[0] ? (
+                                        <img src={selected.property.images[0]} alt=""
+                                            className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
                                     ) : (
-                                        <div className="w-14 h-14 rounded-xl bg-surface-container flex items-center justify-center flex-shrink-0">
-                                            <Icon name="home" className="text-outline-variant text-[24px]" />
+                                        <div className="w-12 h-12 rounded-xl bg-surface-container flex items-center justify-center flex-shrink-0">
+                                            <Icon name="home" className="text-outline-variant text-[22px]" />
                                         </div>
                                     )}
                                     <div>
                                         <p className="text-xs text-on-surface-variant mb-0.5">Annonce concernée</p>
-                                        <p className="font-bold text-on-surface text-sm">
-                                            {selected.properties?.title || 'Annonce'}
-                                        </p>
+                                        <p className="font-bold text-on-surface text-sm">{selected.property?.title}</p>
                                         <p className="text-[10px] text-outline mt-0.5">
-                                            Reçu le {fmt(selected.created_at)}
+                                            {thread.length} message{thread.length > 1 ? 's' : ''} dans cette conversation
                                         </p>
                                     </div>
                                 </div>
 
-                                {/* Message */}
-                                <div className="p-5">
-                                    <div className="flex items-start gap-3 mb-6">
-                                        <div className="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-primary text-xs font-bold flex-shrink-0">
-                                            A
-                                        </div>
-                                        <div className="bg-surface-container px-4 py-3 rounded-2xl rounded-tl-none max-w-sm">
-                                            <p className="text-sm text-on-surface leading-relaxed">{selected.content}</p>
-                                        </div>
-                                    </div>
+                                {/* Messages */}
+                                <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
+                                    {thread.map(msg => {
+                                        const isMine = msg.sender_id === user.id
+                                        return (
+                                            <div key={msg.id} className={`flex items-end gap-2 ${isMine ? 'flex-row-reverse' : 'flex-row'}`}>
+                                                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                                                    isMine ? 'bg-primary text-white' : 'bg-primary-container text-primary'
+                                                }`}>
+                                                    {isMine ? 'V' : 'A'}
+                                                </div>
+                                                <div className={`flex flex-col gap-1 max-w-[70%] ${isMine ? 'items-end' : 'items-start'}`}>
+                                                    <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+                                                        isMine
+                                                            ? 'bg-primary text-white rounded-br-sm'
+                                                            : 'bg-surface-container text-on-surface rounded-bl-sm'
+                                                    }`}>
+                                                        {msg.content}
+                                                    </div>
+                                                    <p className="text-[10px] text-outline px-1">{fmt(msg.created_at)}</p>
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
 
-                                    {/* Zone réponse */}
-                                    <div className="border-t border-outline-variant/15 pt-5">
-                                        <p className="text-xs font-medium text-on-surface-variant mb-3">Votre réponse :</p>
+                                {/* Zone réponse */}
+                                <div className="p-5 border-t border-outline-variant/15 flex-shrink-0">
+                                    <div className="flex gap-3 items-end">
                                         <textarea
                                             value={reply}
                                             onChange={e => setReply(e.target.value)}
-                                            placeholder="Écrivez votre réponse à l'acheteur..."
-                                            rows={3}
-                                            className="w-full px-4 py-3 bg-surface-container border border-outline-variant/20 rounded-xl text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all placeholder:text-outline/40 resize-none mb-3"
+                                            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleReply() } }}
+                                            placeholder="Répondre à l'acheteur... (Entrée pour envoyer)"
+                                            rows={2}
+                                            className="flex-1 px-4 py-3 bg-surface-container border border-outline-variant/20 rounded-xl text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all placeholder:text-outline/40 resize-none"
                                         />
-                                        <div className="flex justify-between items-center">
-                                            <p className="text-[10px] text-on-surface-variant flex items-center gap-1">
-                                                <Icon name="lock" className="text-[12px]" />
-                                                La réponse sera envoyée de façon anonyme
-                                            </p>
-                                            <button
-                                                onClick={handleReply}
-                                                disabled={sending || !reply.trim()}
-                                                className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-xl text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-all"
-                                            >
-                                                {sending
-                                                    ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                                    : <><Icon name="send" className="text-[16px]" />Répondre</>
-                                                }
-                                            </button>
-                                        </div>
+                                        <button
+                                            onClick={handleReply}
+                                            disabled={sending || !reply.trim()}
+                                            className="p-3 bg-primary text-white rounded-xl hover:opacity-90 disabled:opacity-50 transition-all flex-shrink-0"
+                                        >
+                                            {sending
+                                                ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                : <Icon name="send" className="text-[20px]" />
+                                            }
+                                        </button>
                                     </div>
+                                    <p className="text-[10px] text-outline mt-2 flex items-center gap-1">
+                                        <Icon name="lock" className="text-[12px]" />
+                                        La réponse sera envoyée de façon anonyme
+                                    </p>
                                 </div>
                             </div>
                         ) : (
-                            <div className="h-full flex items-center justify-center py-20 bg-surface-container-low rounded-2xl">
+                            <div className="flex items-center justify-center py-20 bg-surface-container-low rounded-2xl h-full">
                                 <div className="text-center">
-                                    <Icon name="chat_bubble_outline" className="text-[48px] text-outline-variant mb-3" />
-                                    <p className="text-sm text-on-surface-variant">Sélectionnez un message pour le lire</p>
+                                    <Icon name="forum" className="text-[56px] text-outline-variant mb-3" />
+                                    <p className="text-sm font-medium text-on-surface-variant">Sélectionnez une conversation</p>
                                 </div>
                             </div>
                         )}
