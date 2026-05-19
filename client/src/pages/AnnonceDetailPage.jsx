@@ -18,7 +18,6 @@ function Icon({ name, filled = false, className = '' }) {
     )
 }
 
-// ─── Composant formulaire de contact ────────────────────────────────────────
 function ContactCard({ property, user }) {
     const [showForm, setShowForm] = useState(false)
     const [message, setMessage] = useState('')
@@ -162,6 +161,12 @@ export default function AnnonceDetailPage() {
     const [isFavorite, setIsFavorite] = useState(false)
     const [selectedImage, setSelectedImage] = useState(0)
 
+    // ← States signalement
+    const [showReportModal, setShowReportModal] = useState(false)
+    const [reportReason, setReportReason] = useState('')
+    const [reportDesc, setReportDesc] = useState('')
+    const [reportLoading, setReportLoading] = useState(false)
+
     const fmt = (n) => new Intl.NumberFormat('fr-MA', {
         style: 'currency', currency: 'MAD', maximumFractionDigits: 0
     }).format(n)
@@ -188,7 +193,6 @@ export default function AnnonceDetailPage() {
                 if (error) throw error
                 setProperty(data)
             } catch (e) {
-                console.error('Erreur:', e)
                 toast.error('Annonce introuvable')
                 navigate('/annonces')
             } finally {
@@ -200,26 +204,16 @@ export default function AnnonceDetailPage() {
 
     useEffect(() => {
         if (!user || !property) return
-
         const loadUserMeta = async () => {
             try {
-                await supabase.from('property_views').insert({
-                    user_id: user.id,
-                    property_id: id,
-                })
+                await supabase.from('property_views').insert({ user_id: user.id, property_id: id })
             } catch (_) { }
-
             try {
                 const { data: fav } = await supabase
-                    .from('favorites')
-                    .select('id')
-                    .eq('user_id', user.id)
-                    .eq('property_id', id)
-                    .single()
+                    .from('favorites').select('id')
+                    .eq('user_id', user.id).eq('property_id', id).single()
                 setIsFavorite(!!fav)
-            } catch (_) {
-                setIsFavorite(false)
-            }
+            } catch (_) { setIsFavorite(false) }
         }
         loadUserMeta()
     }, [user, property, id])
@@ -227,14 +221,35 @@ export default function AnnonceDetailPage() {
     const toggleFavorite = async () => {
         if (!user) { toast.error('Connectez-vous pour sauvegarder'); return }
         if (isFavorite) {
-            await supabase.from('favorites').delete()
-                .eq('user_id', user.id).eq('property_id', id)
+            await supabase.from('favorites').delete().eq('user_id', user.id).eq('property_id', id)
             setIsFavorite(false)
             toast.success('Retiré des favoris')
         } else {
             await supabase.from('favorites').insert({ user_id: user.id, property_id: id })
             setIsFavorite(true)
             toast.success('Ajouté aux favoris ❤️')
+        }
+    }
+
+    const handleReport = async () => {
+        if (!reportReason) { toast.error('Choisissez une raison'); return }
+        setReportLoading(true)
+        try {
+            const { error } = await supabase.from('reports').insert({
+                property_id: id,
+                user_id: user.id,
+                reason: reportReason,
+                description: reportDesc || null,
+            })
+            if (error) throw error
+            toast.success('Signalement envoyé ✅')
+            setShowReportModal(false)
+            setReportReason('')
+            setReportDesc('')
+        } catch (err) {
+            toast.error('Erreur lors du signalement')
+        } finally {
+            setReportLoading(false)
         }
     }
 
@@ -262,26 +277,18 @@ export default function AnnonceDetailPage() {
 
             <main className="flex-1 ml-64 p-10">
 
-                {/* Retour */}
-                <button
-                    onClick={() => navigate(-1)}
-                    className="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors mb-8 text-sm font-medium"
-                >
+                <button onClick={() => navigate(-1)}
+                    className="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors mb-8 text-sm font-medium">
                     <Icon name="arrow_back" className="text-[20px]" />
                     Retour aux annonces
                 </button>
 
-                {/* Bannière Vendu / Loué */}
                 {isUnavailable && (
                     <div className={`mb-6 px-5 py-4 rounded-xl flex items-center gap-3 ${
-                        property.status === 'sold'
-                            ? 'bg-red-50 border border-red-200'
-                            : 'bg-purple-50 border border-purple-200'
+                        property.status === 'sold' ? 'bg-red-50 border border-red-200' : 'bg-purple-50 border border-purple-200'
                     }`}>
-                        <Icon
-                            name={property.status === 'sold' ? 'sell' : 'key'}
-                            className={`text-[24px] ${property.status === 'sold' ? 'text-red-600' : 'text-purple-600'}`}
-                        />
+                        <Icon name={property.status === 'sold' ? 'sell' : 'key'}
+                            className={`text-[24px] ${property.status === 'sold' ? 'text-red-600' : 'text-purple-600'}`} />
                         <div>
                             <p className={`font-bold text-sm ${property.status === 'sold' ? 'text-red-800' : 'text-purple-800'}`}>
                                 Bien {property.status === 'sold' ? 'Vendu' : 'Loué'}
@@ -295,29 +302,23 @@ export default function AnnonceDetailPage() {
 
                 <div className="grid grid-cols-12 gap-8">
 
-                    {/* ── Colonne gauche ── */}
+                    {/* Colonne gauche */}
                     <div className="col-span-12 lg:col-span-8">
 
-                        {/* Image principale */}
                         <div className="relative rounded-2xl overflow-hidden h-[420px] mb-3 bg-surface-container">
                             {images[selectedImage] ? (
-                                <img
-                                    src={images[selectedImage]}
-                                    alt={property.title}
-                                    className={`w-full h-full object-cover ${isUnavailable ? 'opacity-60' : ''}`}
-                                />
+                                <img src={images[selectedImage]} alt={property.title}
+                                    className={`w-full h-full object-cover ${isUnavailable ? 'opacity-60' : ''}`} />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center">
                                     <Icon name="home" className="text-[80px] text-outline-variant" />
                                 </div>
                             )}
 
-                            {/* Badge type */}
                             <span className={`absolute top-4 left-4 px-3 py-1.5 ${typeColor[property.type] || 'bg-primary'} text-white text-xs font-semibold rounded-full uppercase tracking-wider`}>
                                 {typeLabel[property.type] || property.type}
                             </span>
 
-                            {/* Badge Vendu / Loué */}
                             {isUnavailable && (
                                 <div className="absolute inset-0 flex items-center justify-center">
                                     <span className={`text-white font-extrabold text-4xl uppercase tracking-widest rotate-[-15deg] border-4 border-white px-6 py-2 rounded-xl ${
@@ -328,41 +329,31 @@ export default function AnnonceDetailPage() {
                                 </div>
                             )}
 
-                            {/* Bouton favori */}
                             {!isUnavailable && (
-                                <button
-                                    onClick={toggleFavorite}
-                                    className="absolute top-4 right-4 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:bg-white transition-colors"
-                                >
+                                <button onClick={toggleFavorite}
+                                    className="absolute top-4 right-4 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:bg-white transition-colors">
                                     <Icon name="favorite" filled={isFavorite}
                                         className={`text-[20px] ${isFavorite ? 'text-error' : 'text-outline-variant'}`} />
                                 </button>
                             )}
                         </div>
 
-                        {/* Miniatures */}
                         {images.length > 1 && (
                             <div className="flex gap-2 mb-8">
                                 {images.map((img, i) => (
-                                    <button
-                                        key={i}
-                                        onClick={() => setSelectedImage(i)}
+                                    <button key={i} onClick={() => setSelectedImage(i)}
                                         className={`w-20 h-16 rounded-xl overflow-hidden border-2 transition-all ${
                                             selectedImage === i ? 'border-primary' : 'border-transparent opacity-60 hover:opacity-100'
-                                        }`}
-                                    >
+                                        }`}>
                                         <img src={img} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
                                     </button>
                                 ))}
                             </div>
                         )}
 
-                        {/* Titre et prix */}
                         <div className="flex justify-between items-start mb-6">
                             <div>
-                                <h1 className="text-3xl font-headline font-extrabold text-on-surface mb-2">
-                                    {property.title}
-                                </h1>
+                                <h1 className="text-3xl font-headline font-extrabold text-on-surface mb-2">{property.title}</h1>
                                 <p className="text-on-surface-variant flex items-center gap-1">
                                     <Icon name="location_on" className="text-primary text-[18px]" />
                                     {property.address ? `${property.address}, ` : ''}{property.city}
@@ -383,7 +374,6 @@ export default function AnnonceDetailPage() {
                             </div>
                         </div>
 
-                        {/* Caractéristiques */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                             {property.surface && (
                                 <div className="bg-surface-container-lowest p-4 rounded-xl text-center">
@@ -422,19 +412,15 @@ export default function AnnonceDetailPage() {
                             )}
                         </div>
 
-                        {/* Description */}
                         {property.description && (
                             <div className="mb-8">
                                 <h2 className="text-xl font-headline font-bold mb-4">Description</h2>
                                 <div className="bg-surface-container-lowest p-6 rounded-2xl">
-                                    <p className="text-on-surface-variant leading-relaxed text-sm">
-                                        {property.description}
-                                    </p>
+                                    <p className="text-on-surface-variant leading-relaxed text-sm">{property.description}</p>
                                 </div>
                             </div>
                         )}
 
-                        {/* Localisation */}
                         {property.lat && property.lng && (
                             <div className="mb-8">
                                 <h2 className="text-xl font-headline font-bold mb-4">Localisation</h2>
@@ -442,48 +428,48 @@ export default function AnnonceDetailPage() {
                                     <Icon name="location_on" className="text-primary text-[24px]" />
                                     <div>
                                         <p className="font-medium text-on-surface">{property.city}</p>
-                                        {property.address && (
-                                            <p className="text-sm text-on-surface-variant">{property.address}</p>
-                                        )}
+                                        {property.address && <p className="text-sm text-on-surface-variant">{property.address}</p>}
                                     </div>
-                                    <button
-                                        onClick={() => navigate('/carte')}
-                                        className="ml-auto px-4 py-2 bg-primary/10 text-primary rounded-full text-xs font-medium hover:bg-primary/20 transition-colors"
-                                    >
+                                    <button onClick={() => navigate('/carte')}
+                                        className="ml-auto px-4 py-2 bg-primary/10 text-primary rounded-full text-xs font-medium hover:bg-primary/20 transition-colors">
                                         Voir sur la carte
                                     </button>
                                 </div>
                             </div>
                         )}
 
-                        {/* Avis clients */}
                         <AvisClients propertyId={property.id} />
-
                     </div>
 
-                    {/* ── Colonne droite — Contact ── */}
+                    {/* Colonne droite */}
                     <div className="col-span-12 lg:col-span-4">
                         <div className="sticky top-10">
 
-                            {/* ✅ ContactCard fonctionnel */}
                             <div className="mb-4">
                                 <ContactCard property={property} user={user} />
                             </div>
 
-                            {/* Favori */}
-                            <button
-                                onClick={toggleFavorite}
+                            <button onClick={toggleFavorite}
                                 className={`w-full py-3 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2 border ${
                                     isFavorite
                                         ? 'bg-error/10 text-error border-error/20 hover:bg-error/20'
                                         : 'border-outline-variant/30 text-on-surface hover:bg-surface-container-low'
-                                }`}
-                            >
+                                }`}>
                                 <Icon name="favorite" filled={isFavorite} className="text-[18px]" />
                                 {isFavorite ? 'Retirer des favoris' : 'Sauvegarder'}
                             </button>
 
-                            {/* Infos publication */}
+                            {/* ← Bouton Signaler */}
+                            {user && user.id !== property.user_id && (
+                                <button
+                                    onClick={() => setShowReportModal(true)}
+                                    className="w-full py-3 border border-outline-variant/30 text-outline rounded-xl font-medium text-sm hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all flex items-center justify-center gap-2 mt-3"
+                                >
+                                    <Icon name="flag" className="text-[18px]" />
+                                    Signaler cette annonce
+                                </button>
+                            )}
+
                             <div className="mt-4 p-4 bg-surface-container-low rounded-xl">
                                 <p className="text-xs text-on-surface-variant flex items-center gap-1 mb-1">
                                     <Icon name="calendar_today" className="text-[14px]" />
@@ -494,14 +480,10 @@ export default function AnnonceDetailPage() {
                                     {property.views || 0} vue{property.views !== 1 ? 's' : ''}
                                 </p>
                             </div>
-
                         </div>
                     </div>
-                    {/* ── fin colonne droite ── */}
-
                 </div>
 
-                {/* Footer */}
                 <footer className="py-10 flex justify-between items-center border-t border-outline-variant/15 mt-16 text-sm">
                     <span className="text-outline">© 2025 DarNa — Plateforme Immobilière Marocaine</span>
                     <div className="flex gap-5">
@@ -509,8 +491,72 @@ export default function AnnonceDetailPage() {
                         <a href="#" className="text-outline hover:text-on-surface">CGU</a>
                     </div>
                 </footer>
-
             </main>
+
+            {/* Modale signalement */}
+            {showReportModal && (
+                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-surface rounded-2xl p-8 max-w-md w-full shadow-2xl">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="p-2 bg-red-100 rounded-full">
+                                <Icon name="flag" className="text-red-600 text-[22px]" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-headline font-bold">Signaler cette annonce</h3>
+                                <p className="text-xs text-on-surface-variant">Aidez-nous à maintenir la qualité</p>
+                            </div>
+                        </div>
+
+                        <div className="mb-4">
+                            <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-widest mb-3">
+                                Raison du signalement
+                            </label>
+                            <div className="flex flex-col gap-2">
+                                {[
+                                    { value: 'spam', label: '🚫 Spam ou annonce dupliquée' },
+                                    { value: 'fausse_annonce', label: '❌ Fausse annonce' },
+                                    { value: 'prix_incorrect', label: '💰 Prix incorrect ou trompeur' },
+                                    { value: 'photos_incorrectes', label: '📷 Photos incorrectes' },
+                                    { value: 'autre', label: '⚠️ Autre raison' },
+                                ].map(r => (
+                                    <button key={r.value} onClick={() => setReportReason(r.value)}
+                                        className={`px-4 py-3 rounded-xl text-sm text-left transition-all border-2 ${
+                                            reportReason === r.value
+                                                ? 'border-red-400 bg-red-50 text-red-700'
+                                                : 'border-outline-variant/20 hover:border-red-200 text-on-surface'
+                                        }`}>
+                                        {r.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="mb-6">
+                            <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-widest mb-2">
+                                Description (optionnel)
+                            </label>
+                            <textarea
+                                value={reportDesc}
+                                onChange={e => setReportDesc(e.target.value)}
+                                placeholder="Décrivez le problème..."
+                                rows={3}
+                                className="w-full px-4 py-3 bg-surface-container border border-outline-variant/20 rounded-xl text-sm outline-none resize-none"
+                            />
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button onClick={() => setShowReportModal(false)}
+                                className="flex-1 px-4 py-2.5 border border-outline-variant/30 text-on-surface rounded-full text-sm font-medium hover:bg-surface-container-low transition-colors">
+                                Annuler
+                            </button>
+                            <button onClick={handleReport} disabled={!reportReason || reportLoading}
+                                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-full text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-40">
+                                {reportLoading ? 'Envoi...' : 'Envoyer'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

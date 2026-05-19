@@ -27,6 +27,7 @@ function Sidebar({ displayName, initial, avatarUrl, onSignOut, activePage, setAc
                     { icon: 'group', label: 'Utilisateurs', key: 'users' },
                     { icon: 'bar_chart', label: 'Analytics', key: 'analytics' },
                     { icon: 'domain', label: 'Annonces', key: 'annonces' },
+                    { icon: 'flag', label: 'Signalements', key: 'reports' },
                 ].map(l => (
                     <button key={l.key} onClick={() => setActivePage(l.key)}
                         className={`flex items-center gap-3 px-4 py-3 rounded-full text-sm font-medium transition-all text-left w-full
@@ -537,7 +538,183 @@ function AnnoncesAdminPage() {
         </div>
     )
 }
+function SignalementsPage() {
+    const [reports, setReports] = useState([])
+    const [loading, setLoading] = useState(true)
+    const [filterStatus, setFilterStatus] = useState('pending')
 
+    useEffect(() => { loadReports() }, [])
+
+    const loadReports = async () => {
+        setLoading(true)
+        try {
+            const { data, error } = await supabase
+                .from('reports')
+                .select(`*, properties(id, title, city, images, status), users(email, full_name)`)
+                .order('created_at', { ascending: false })
+            if (error) throw error
+            setReports(data || [])
+        } catch (err) {
+            toast.error('Erreur chargement signalements')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleResolve = async (reportId, propertyId, action) => {
+        try {
+            await supabase.from('reports').update({ status: action }).eq('id', reportId)
+            if (action === 'resolved') {
+                await supabase.from('properties').update({ status: 'archived' }).eq('id', propertyId)
+                toast.success('Annonce archivée et signalement résolu ✅')
+            } else {
+                toast.success('Signalement rejeté')
+            }
+            loadReports()
+        } catch (err) {
+            toast.error('Erreur lors de la modération')
+        }
+    }
+
+    const reasonLabel = {
+        spam: '🚫 Spam',
+        fausse_annonce: '❌ Fausse annonce',
+        prix_incorrect: '💰 Prix incorrect',
+        photos_incorrectes: '📷 Photos incorrectes',
+        autre: '⚠️ Autre',
+    }
+
+    const filtered = reports.filter(r => filterStatus === 'all' || r.status === filterStatus)
+    const stats = {
+        pending: reports.filter(r => r.status === 'pending').length,
+        resolved: reports.filter(r => r.status === 'resolved').length,
+        rejected: reports.filter(r => r.status === 'rejected').length,
+    }
+
+    return (
+        <div>
+            <header className="mb-10">
+                <h2 className="text-4xl font-headline font-extrabold tracking-tight text-primary mb-2">Signalements</h2>
+                <p className="text-on-surface-variant">Modérez les annonces signalées par les utilisateurs</p>
+            </header>
+
+            <section className="grid grid-cols-3 gap-5 mb-8">
+                {[
+                    { label: 'En attente', value: stats.pending, icon: 'pending', bg: 'bg-amber-100', text: 'text-amber-800' },
+                    { label: 'Résolus', value: stats.resolved, icon: 'check_circle', bg: 'bg-green-100', text: 'text-green-800' },
+                    { label: 'Rejetés', value: stats.rejected, icon: 'cancel', bg: 'bg-surface-container', text: 'text-on-surface' },
+                ].map(s => (
+                    <div key={s.label} className={`${s.bg} ${s.text} p-6 rounded-xl flex flex-col gap-3`}>
+                        <Icon name={s.icon} className="text-[24px] opacity-80" />
+                        <div>
+                            <p className="text-3xl font-headline font-extrabold">{String(s.value).padStart(2, '0')}</p>
+                            <p className="text-xs font-medium opacity-70 uppercase tracking-widest mt-1">{s.label}</p>
+                        </div>
+                    </div>
+                ))}
+            </section>
+
+            <div className="flex gap-2 mb-6">
+                {[
+                    { value: 'pending', label: 'En attente' },
+                    { value: 'resolved', label: 'Résolus' },
+                    { value: 'rejected', label: 'Rejetés' },
+                    { value: 'all', label: 'Tous' },
+                ].map(f => (
+                    <button key={f.value} onClick={() => setFilterStatus(f.value)}
+                        className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                            filterStatus === f.value
+                                ? 'bg-primary text-white'
+                                : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container'
+                        }`}>
+                        {f.label}
+                        {f.value === 'pending' && stats.pending > 0 && (
+                            <span className="ml-2 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                                {stats.pending}
+                            </span>
+                        )}
+                    </button>
+                ))}
+            </div>
+
+            {loading ? (
+                <div className="flex items-center justify-center py-20">
+                    <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+                </div>
+            ) : filtered.length === 0 ? (
+                <div className="text-center py-20 bg-surface-container-low rounded-2xl">
+                    <Icon name="flag" className="text-[64px] text-outline-variant mb-3" />
+                    <p className="text-on-surface-variant font-medium">Aucun signalement</p>
+                </div>
+            ) : (
+                <div className="flex flex-col gap-4">
+                    {filtered.map(r => (
+                        <div key={r.id} className={`bg-surface-container-lowest rounded-2xl p-6 border-2 transition-all ${
+                            r.status === 'pending' ? 'border-amber-200' : 'border-outline-variant/10'
+                        }`}>
+                            <div className="flex gap-4">
+                                <div className="w-20 h-20 rounded-xl overflow-hidden bg-surface-container flex-shrink-0">
+                                    {r.properties?.images?.[0]
+                                        ? <img src={r.properties.images[0]} alt="" className="w-full h-full object-cover" />
+                                        : <div className="w-full h-full flex items-center justify-center"><Icon name="home" className="text-outline-variant text-[24px]" /></div>
+                                    }
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div>
+                                            <p className="font-bold text-on-surface truncate">{r.properties?.title || 'Annonce supprimée'}</p>
+                                            <p className="text-sm text-on-surface-variant">{r.properties?.city}</p>
+                                        </div>
+                                        <span className={`px-3 py-1 rounded-full text-xs font-semibold flex-shrink-0 ${
+                                            r.status === 'pending' ? 'bg-amber-100 text-amber-800' :
+                                            r.status === 'resolved' ? 'bg-green-100 text-green-800' :
+                                            'bg-surface-container text-outline'
+                                        }`}>
+                                            {r.status === 'pending' ? 'En attente' : r.status === 'resolved' ? 'Résolu' : 'Rejeté'}
+                                        </span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-3 mt-3">
+                                        <span className="text-xs bg-red-100 text-red-700 px-3 py-1 rounded-full font-medium">
+                                            {reasonLabel[r.reason] || r.reason}
+                                        </span>
+                                        <span className="text-xs text-on-surface-variant flex items-center gap-1">
+                                            <Icon name="person" className="text-[14px]" />
+                                            {r.users?.email}
+                                        </span>
+                                        <span className="text-xs text-on-surface-variant flex items-center gap-1">
+                                            <Icon name="schedule" className="text-[14px]" />
+                                            {new Date(r.created_at).toLocaleDateString('fr-FR')}
+                                        </span>
+                                    </div>
+                                    {r.description && (
+                                        <p className="mt-2 text-sm text-on-surface-variant bg-surface-container px-4 py-2 rounded-xl">
+                                            "{r.description}"
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+
+                            {r.status === 'pending' && (
+                                <div className="flex gap-3 mt-4 pt-4 border-t border-outline-variant/10">
+                                    <button onClick={() => handleResolve(r.id, r.property_id, 'resolved')}
+                                        className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-sm font-medium hover:bg-red-700 transition-all flex items-center justify-center gap-2">
+                                        <Icon name="archive" className="text-[18px]" />
+                                        Archiver l'annonce
+                                    </button>
+                                    <button onClick={() => handleResolve(r.id, r.property_id, 'rejected')}
+                                        className="flex-1 py-2.5 border border-outline-variant/30 text-on-surface rounded-xl text-sm font-medium hover:bg-surface-container-low transition-all flex items-center justify-center gap-2">
+                                        <Icon name="thumb_down" className="text-[18px]" />
+                                        Rejeter le signalement
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    )
+}
 // ─── Page principale Admin ────────────────────────────────────────────────────
 export default function AdminPage() {
     const { user, signOut, getAllUsers, suspendUser, activateUser, banUser, updateUserRole, deleteUser } = useAuth()
@@ -760,6 +937,7 @@ export default function AdminPage() {
 
                 {activePage === 'analytics' && <AnalyticsPage />}
                 {activePage === 'annonces' && <AnnoncesAdminPage />}
+                {activePage === 'reports' && <SignalementsPage />}
 
                 <footer className="py-10 flex justify-between items-center border-t border-outline-variant/15 mt-12 text-sm">
                     <span className="text-outline">© 2025 DarNa — Administration</span>
